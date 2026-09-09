@@ -140,6 +140,7 @@ jobs:
             awk '{print $1}'
           )"
 
+          echo "certificate_count=${certificate_count}" >> "${GITHUB_OUTPUT}"
           echo "sha256=${sha256}" >> "${GITHUB_OUTPUT}"
 
           echo "CA bundle SHA256:"
