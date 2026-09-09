@@ -3,18 +3,18 @@
     "name": "Mozilla NSS Root Certificate Store",
     "url": "https://hg.mozilla.org/releases/mozilla-release/raw-file/default/security/nss/lib/ckfw/builtins/certdata.txt",
     "tree": "mozilla-release",
-    "sha256": null
+    "sha256": "81b7f2576333a2e360e673f912d7b0b7a765d836c731003e348a46cac5d37198"
   },
   "generator": {
     "name": "mk-ca-bundle.pl",
     "repository": "https://github.com/curl/curl",
     "commit": "0134682",
-    "version": null
+    "version": "1.33"
   },
   "bundle": {
     "file": "cacert.pem",
-    "sha256": null,
-    "certificate_count": null
+    "sha256": "6bcd1ec5d29f453a00b198d809b009d14775390da5183616fdb93255cff19e01",
+    "certificate_count": 121
   },
-  "generated_at": null
+  "generated_at": ""
 }
