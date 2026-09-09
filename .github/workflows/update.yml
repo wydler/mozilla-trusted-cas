@@ -57,24 +57,22 @@ jobs:
         run: |
           perl -c mk-ca-bundle.pl
 
-      - name: Determine mk-ca-bundle version
+      - name: Determine mk-ca-bundle.pl version
         id: generator
         run: |
           version="$(
-            grep -E \
-              "^[[:space:]]*my[[:space:]]+\$version[[:space:]]*=" \
+            sed -nE "s/^[[:space:]]*my[[:space:]]+\$version[[:space:]]*=[[:space:]]*['\"]([^'\"]+)['\"].*$/\1/p" \
               mk-ca-bundle.pl |
-            sed -E "s/.*['\"]([^'\"]+)['\"].*/\1/" |
             head -n1
           )"
-
+      
           if [ -z "${version}" ]; then
             echo "::error::Unable to determine mk-ca-bundle.pl version"
+            echo "::error::Could not find 'my \$version = ...' in mk-ca-bundle.pl"
             exit 1
           fi
-
+      
           echo "version=${version}" >> "${GITHUB_OUTPUT}"
-
           echo "mk-ca-bundle.pl version: ${version}"
           echo "curl commit: ${CURL_COMMIT}"
 
