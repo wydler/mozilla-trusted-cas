@@ -8,13 +8,13 @@
   "generator": {
     "name": "mk-ca-bundle.pl",
     "repository": "https://github.com/curl/curl",
-    "commit": "0134682",
+    "commit": "01346829096c61b372692f6dc43ffa778c6caccd",
     "version": "1.33"
   },
   "bundle": {
     "file": "cacert.pem",
-    "sha256": "4351542a931ad3541336512fc957c855fe291a69fee52a03845adc231187e2f5",
+    "sha256": "fe2996f87cb7273450593e74c58de8f03f9ddd28612f74976577e65157ba782c",
     "certificate_count": 121
   },
-  "generated_at": "2026-09-09T18:16:58Z"
+  "generated_at": "2026-09-09T18:25:17Z"
 }
