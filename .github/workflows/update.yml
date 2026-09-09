@@ -15,9 +15,7 @@ env:
   CURL_COMMIT: '0134682'
 
   # Mozilla NSS certdata source.
-  CERTDATA_URL: >-
-    https://hg.mozilla.org/releases/mozilla-release/raw-file/default/
-    security/nss/lib/ckfw/builtins/certdata.txt
+  CERTDATA_URL: 'https://hg.mozilla.org/releases/mozilla-release/raw-file/default/security/nss/lib/ckfw/builtins/certdata.txt'
 
   # curl repository.
   CURL_REPOSITORY: 'https://github.com/curl/curl'
