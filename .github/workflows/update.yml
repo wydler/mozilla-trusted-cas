@@ -132,7 +132,6 @@ jobs:
       - name: Generate cacert.pem
         run: |
           ./mk-ca-bundle.pl \
-            -f \
             -m \
             -n \
             cacert.pem
