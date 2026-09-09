@@ -145,11 +145,13 @@ jobs:
           certificate_count="$(
             grep -c '^-----BEGIN CERTIFICATE-----$' cacert.pem
           )"
-
-          echo "Certificate count: ${certificate_count}"
-
-          if [ "${certificate_count}" -lt 50 ]; then
-            echo "::error::Unexpectedly low certificate count: ${certificate_count}"
+          
+          end_certificate_count="$(
+            grep -c '^-----END CERTIFICATE-----$' cacert.pem
+          )"
+          
+          if [ "${certificate_count}" -ne "${end_certificate_count}" ]; then
+            echo "::error::Mismatched certificate markers"
             exit 1
           fi
 
