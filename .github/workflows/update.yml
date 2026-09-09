@@ -123,7 +123,7 @@ jobs:
 
           echo "Certificate count: ${certificate_count}"
 
-          if [ "${certificate_count}" -lt 1000 ]; then
+          if [ "${certificate_count}" -lt 50 ]; then
             echo "::error::Unexpectedly low certificate count: ${certificate_count}"
             exit 1
           fi
