@@ -38,6 +38,31 @@ jobs:
             openssl \
             perl
 
+      - name: Create necessary metadatas
+        id: metadata
+        shell: bash
+        run: |
+
+          # Determines the current date in YYYYMMDD format. Using the Europe/Berlin timezone.
+          current_date=$(TZ='Europe/Berlin' date +'%Y%m%d')
+
+          # Formats the GitHub run number to exactly 4 digits and pads missing digits with leading zeros.
+          gh_action_run_number=$(printf "%04d" "${GITHUB_RUN_NUMBER}")
+
+          # Contains the current attempt number of the same workflow run. This value increases when the workflow is re-run.
+          gh_action_run_attempt="${{ github.run_attempt }}"
+
+          # Builds the version string using the format: YYYYMMDD.gh_action_run_number.gh_action_run_attempt. Example: 20260523.0042.1
+          version_full=${current_date}.${gh_action_run_number}.${gh_action_run_attempt}
+
+          gh_branch_name="updates/mozilla-ca-bundle/${version_full}"
+
+          # GitHub Outputs
+          {
+            echo "gh_branch_name=${gh_branch_name}"
+          } >> "$GITHUB_OUTPUT"
+
+
       - name: Download mk-ca-bundle.pl
         run: |
           curl \
@@ -233,10 +258,10 @@ jobs:
         uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1  # v8.1.1
         with:
           token: "${{ secrets.GH_TOKEN }}"
-          branch: update/mozilla-ca-bundle
+          branch: "${{ steps.metadata.outputs.gh_branch_name }}"
           delete-branch: true
-          commit-message: 'chore: update Mozilla CA bundle'
-          title: 'chore: update Mozilla CA bundle'
+          commit-message: "chore: update Mozilla CA bundle"
+          title: "chore: update Mozilla CA bundle"
           body: |
             ## Mozilla CA bundle update
 
