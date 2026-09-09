@@ -260,6 +260,12 @@ jobs:
             echo "Changes detected."
           fi
 
+      - name: Validate changes
+        if: steps.changes.outputs.changed == 'true'
+        run: |
+          git diff --check
+
+
       - name: Show changes
         if: steps.changes.outputs.changed == 'true'
         run: |
