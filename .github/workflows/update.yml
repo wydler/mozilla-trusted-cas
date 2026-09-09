@@ -20,6 +20,7 @@ env:
   # curl repository.
   CURL_REPOSITORY: 'https://github.com/curl/curl'
 
+
 jobs:
   update:
     name: Generate CA bundle
@@ -59,14 +60,16 @@ jobs:
         id: generator
         run: |
           version="$(
-            sed -nE "s/^[[:space:]]*my[[:space:]]+\$version[[:space:]]*=[[:space:]]*['\"]([^'\"]+)['\"].*$/\1/p" \
-              mk-ca-bundle.pl |
-            head -n1
+            awk -F"['\"]" '
+              /^[[:space:]]*my[[:space:]]+\$version[[:space:]]*=/ {
+                print $2
+                exit
+              }
+            ' mk-ca-bundle.pl
           )"
       
           if [ -z "${version}" ]; then
             echo "::error::Unable to determine mk-ca-bundle.pl version"
-            echo "::error::Could not find 'my \$version = ...' in mk-ca-bundle.pl"
             exit 1
           fi
       
