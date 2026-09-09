@@ -76,7 +76,7 @@ jobs:
             --output mk-ca-bundle.pl \
             "${CURL_REPOSITORY}/raw/${CURL_COMMIT}/scripts/mk-ca-bundle.pl"
 
-          chmod 755 mk-ca-bundle.pl
+          chmod +x mk-ca-bundle.p
 
       - name: Validate mk-ca-bundle.pl
         run: |
