@@ -171,24 +171,33 @@ jobs:
           echo "CA bundle SHA256:"
           echo "${sha256}"
 
+
       - name: Generate metadata.json
         run: |
           previous_generated_at=""
-
+          previous_bundle_sha256=""
+      
           if [ -f metadata.json ]; then
             previous_generated_at="$(
               jq -r '.generated_at // empty' metadata.json
             )"
+      
+            previous_bundle_sha256="$(
+              jq -r '.bundle.sha256 // empty' metadata.json
+            )"
           fi
-
-          if git diff --quiet -- cacert.pem; then
+      
+          current_bundle_sha256="${{ steps.bundle.outputs.sha256 }}"
+      
+          if [ "${current_bundle_sha256}" = "${previous_bundle_sha256}" ] &&
+             [ -n "${previous_generated_at}" ]; then
             generated_at="${previous_generated_at}"
           else
             generated_at="$(
               date --utc '+%Y-%m-%dT%H:%M:%SZ'
             )"
           fi
-
+      
           jq -n \
             --arg source_name \
               "Mozilla NSS Root Certificate Store" \
@@ -211,7 +220,7 @@ jobs:
             --arg bundle_sha256 \
               "${{ steps.bundle.outputs.sha256 }}" \
             --argjson certificate_count \
-              "${{ steps.bundle.outputs.certificate_count || 0 }}" \
+              "${{ steps.bundle.outputs.certificate_count }}" \
             --arg generated_at \
               "${generated_at}" \
             '{
@@ -234,24 +243,27 @@ jobs:
               },
               generated_at: $generated_at
             }' > metadata.json
-
+      
           jq . metadata.json
+    
 
       - name: Check for changes
         id: changes
         run: |
           if git diff --quiet -- cacert.pem metadata.json; then
             echo "changed=false" >> "${GITHUB_OUTPUT}"
-            echo "CA bundle is already up to date."
+            echo "No changes detected."
           else
             echo "changed=true" >> "${GITHUB_OUTPUT}"
-            echo "CA bundle has changed."
+            echo "Changes detected."
+            git diff --stat
           fi
 
       - name: Show changes
         if: steps.changes.outputs.changed == 'true'
         run: |
           git diff --stat -- cacert.pem metadata.json
+
 
       - name: Create pull request
         if: steps.changes.outputs.changed == 'true'
