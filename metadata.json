@@ -11,6 +11,12 @@
     "commit": "01346829096c61b372692f6dc43ffa778c6caccd",
     "version": "1.33"
   },
+  "custom_cas": {
+    "directory": "custom-cas",
+    "certificate_count": 0,
+    "added_count": 0,
+    "duplicate_count": 0
+  },
   "bundle": {
     "file": "cacert.pem",
     "sha256": "fe2996f87cb7273450593e74c58de8f03f9ddd28612f74976577e65157ba782c",
