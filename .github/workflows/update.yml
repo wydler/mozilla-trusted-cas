@@ -30,7 +30,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Install dependencies
         run: |
@@ -45,27 +45,25 @@ jobs:
         id: metadata
         shell: bash
         run: |
-
-          # Determines the current date in YYYYMMDD format. Using the Europe/Berlin timezone.
+          # Determines the current date in YYYYMMDD format.
+          # Using the Europe/Berlin timezone.
           current_date=$(TZ='Europe/Berlin' date +'%Y%m%d')
 
-          # Formats the GitHub run number to exactly 4 digits and pads missing digits with leading zeros.
+          # Formats the GitHub run number to exactly 4 digits.
           gh_action_run_number=$(printf "%04d" "${GITHUB_RUN_NUMBER}")
 
-          # Contains the current attempt number of the same workflow run. This value increases when the workflow is re-run.
+          # Contains the current attempt number of the same workflow run.
           gh_action_run_attempt="${{ github.run_attempt }}"
 
-          # Builds the version string using the format: YYYYMMDD.gh_action_run_number.gh_action_run_attempt. Example: 20260523.0042.1
-          version_full=${current_date}.${gh_action_run_number}.${gh_action_run_attempt}
+          # Builds the version string.
+          # Example: 20260523.0042.1
+          version_full="${current_date}.${gh_action_run_number}.${gh_action_run_attempt}"
 
           gh_branch_name="updates/mozilla-ca-bundle/${version_full}"
 
-          # GitHub Outputs
           {
             echo "gh_branch_name=${gh_branch_name}"
-            echo "version_full=${version_full}"
           } >> "$GITHUB_OUTPUT"
-
 
       - name: Download mk-ca-bundle.pl
         run: |
@@ -152,7 +150,7 @@ jobs:
           shopt -s nullglob
 
           certificates=(
-            "${CUSTOM_CA_DIRECTORY}"/*.*
+            "${CUSTOM_CA_DIRECTORY}"/*.pem
           )
 
           custom_certificate_count=0
@@ -235,34 +233,24 @@ jobs:
               tr '[:lower:]' '[:upper:]'
             )"
 
-            subject="$(
-              openssl x509 \
-                -in "${certificate}" \
-                -noout \
-                -subject |
-              sed 's/^subject=//'
-            )"
-
-            issuer="$(
-              openssl x509 \
-                -in "${certificate}" \
-                -noout \
-                -issuer |
-              sed 's/^issuer=//'
-            )"
-
-            echo "Subject: ${subject}"
-            echo "Issuer:  ${issuer}"
             echo "SHA-256: ${fingerprint}"
 
             if grep -Fxq "${fingerprint}" "${existing_fingerprints}"; then
               echo "Certificate already exists in cacert.pem. Skipping."
-              custom_certificate_duplicate=$((custom_certificate_duplicate + 1))
+
+              custom_certificate_duplicate=$(
+                (custom_certificate_duplicate + 1)
+              )
+
               continue
             fi
 
             echo "Adding certificate to cacert.pem."
-            ###
+
+            # ----------------------------------------------------------------
+            # Certificate metadata
+            # ----------------------------------------------------------------
+
             subject="$(
               openssl x509 \
                 -in "${certificate}" \
@@ -271,7 +259,7 @@ jobs:
                 -nameopt RFC2253 |
               sed 's/^subject=//'
             )"
-            
+
             issuer="$(
               openssl x509 \
                 -in "${certificate}" \
@@ -280,7 +268,7 @@ jobs:
                 -nameopt RFC2253 |
               sed 's/^issuer=//'
             )"
-            
+
             serial_number="$(
               openssl x509 \
                 -in "${certificate}" \
@@ -290,7 +278,7 @@ jobs:
               tr '[:lower:]' '[:upper:]' |
               sed 's/../&:/g; s/:$//'
             )"
-            
+
             not_before="$(
               openssl x509 \
                 -in "${certificate}" \
@@ -298,7 +286,7 @@ jobs:
                 -startdate |
               sed 's/^notBefore=//'
             )"
-            
+
             not_after="$(
               openssl x509 \
                 -in "${certificate}" \
@@ -306,7 +294,7 @@ jobs:
                 -enddate |
               sed 's/^notAfter=//'
             )"
-            
+
             sha256_fingerprint="$(
               openssl x509 \
                 -in "${certificate}" \
@@ -316,7 +304,7 @@ jobs:
               sed 's/^sha256 Fingerprint=//' |
               tr '[:lower:]' '[:upper:]'
             )"
-            
+
             sha1_fingerprint="$(
               openssl x509 \
                 -in "${certificate}" \
@@ -326,7 +314,7 @@ jobs:
               sed 's/^sha1 Fingerprint=//' |
               tr '[:lower:]' '[:upper:]'
             )"
-            
+
             # Use the certificate's CN as the header.
             common_name="$(
               openssl x509 \
@@ -337,7 +325,19 @@ jobs:
               sed 's/^subject=//' |
               sed -n 's/^CN=\([^,]*\).*/\1/p'
             )"
-            
+
+            # Fall back to the complete subject if no CN exists.
+            if [ -z "${common_name}" ]; then
+              common_name="${subject}"
+            fi
+
+            # ----------------------------------------------------------------
+            # Add metadata and certificate to the bundle.
+            #
+            # Exactly one blank line is added before every custom CA.
+            # No additional blank line is added after the certificate.
+            # ----------------------------------------------------------------
+
             {
               echo
               echo "${common_name}"
@@ -349,13 +349,13 @@ jobs:
               echo "# Not Valid After : ${not_after}"
               echo "# Fingerprint (SHA-256): ${sha256_fingerprint}"
               echo "# Fingerprint (SHA1): ${sha1_fingerprint}"
-            
+
+              # Remove empty lines from the source PEM.
               sed '/^$/d' "${certificate}"
-              # echo
             } >> cacert.pem
-            
+
             echo "${fingerprint}" >> "${existing_fingerprints}"
-            
+
             custom_certificate_added=$((custom_certificate_added + 1))
           done
 
@@ -416,60 +416,34 @@ jobs:
           echo "CA bundle SHA256:"
           echo "${sha256}"
 
-
       - name: Check for bundle changes
         id: changes
         shell: bash
         run: |
           set -euo pipefail
-      
-          if git ls-files --error-unmatch cacert.pem >/dev/null 2>&1; then
-            # cacert.pem is already tracked.
-            if git diff --quiet -- cacert.pem; then
-              echo "changed=false" >> "${GITHUB_OUTPUT}"
+
+          if git cat-file -e HEAD:cacert.pem 2>/dev/null; then
+            echo "Comparing generated cacert.pem with HEAD:cacert.pem..."
+
+            if cmp -s cacert.pem <(git show HEAD:cacert.pem); then
               echo "No changes detected in cacert.pem."
+              echo "changed=false" >> "${GITHUB_OUTPUT}"
             else
-              echo "changed=true" >> "${GITHUB_OUTPUT}"
               echo "Changes detected in cacert.pem."
+              echo "changed=true" >> "${GITHUB_OUTPUT}"
             fi
           else
-            # cacert.pem does not exist in Git yet.
-            if [ -s cacert.pem ]; then
-              echo "changed=true" >> "${GITHUB_OUTPUT}"
-              echo "cacert.pem is new and will be added."
-            else
-              echo "::error::cacert.pem does not exist or is empty."
-              exit 1
-            fi
+            echo "cacert.pem does not exist in HEAD."
+            echo "New cacert.pem will be added."
+            echo "changed=true" >> "${GITHUB_OUTPUT}"
           fi
-
 
       - name: Generate metadata.json
         if: steps.changes.outputs.changed == 'true'
         run: |
-          previous_generated_at=""
-          previous_bundle_sha256=""
-
-          if [ -f metadata.json ]; then
-            previous_generated_at="$(
-              jq -r '.generated_at // empty' metadata.json
-            )"
-
-            previous_bundle_sha256="$(
-              jq -r '.bundle.sha256 // empty' metadata.json
-            )"
-          fi
-
-          current_bundle_sha256="${{ steps.bundle.outputs.sha256 }}"
-
-          if [ "${current_bundle_sha256}" = "${previous_bundle_sha256}" ] &&
-             [ -n "${previous_generated_at}" ]; then
-            generated_at="${previous_generated_at}"
-          else
-            generated_at="$(
-              date --utc '+%Y-%m-%dT%H:%M:%SZ'
-            )"
-          fi
+          generated_at="$(
+            date --utc '+%Y-%m-%dT%H:%M:%SZ'
+          )"
 
           jq -n \
             --arg source_name \
@@ -533,11 +507,24 @@ jobs:
 
           jq . metadata.json
 
-
       - name: Validate changes
         if: steps.changes.outputs.changed == 'true'
+        shell: bash
         run: |
-          git diff --check
+          set -euo pipefail
+
+          if git ls-files --error-unmatch cacert.pem >/dev/null 2>&1; then
+            git diff --check -- cacert.pem metadata.json
+          else
+            test -s cacert.pem
+
+            if grep -nE '[[:blank:]]+$' cacert.pem; then
+              echo "::error::Trailing whitespace detected in cacert.pem"
+              exit 1
+            fi
+
+            git diff --check -- metadata.json
+          fi
 
       - name: Show changes
         if: steps.changes.outputs.changed == 'true'
@@ -546,7 +533,7 @@ jobs:
 
       - name: Create pull request
         if: steps.changes.outputs.changed == 'true'
-        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1  # v8.1.1
+        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
         with:
           token: "${{ secrets.GH_TOKEN }}"
           sign-commits: true
@@ -594,7 +581,7 @@ jobs:
 
             The generated bundle was validated with OpenSSL.
 
-            `metadata.json` contains the complete provenance information.
+            `metadata.json` contains the provenance information.
 
             This PR was created automatically by GitHub Actions.
 
