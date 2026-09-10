@@ -261,12 +261,98 @@ jobs:
             fi
 
             echo "Adding certificate to cacert.pem."
-
-            cat "${certificate}" >> cacert.pem
-            # printf '\n' >> cacert.pem
-
+            ###
+            subject="$(
+              openssl x509 \
+                -in "${certificate}" \
+                -noout \
+                -subject \
+                -nameopt RFC2253 |
+              sed 's/^subject=//'
+            )"
+            
+            issuer="$(
+              openssl x509 \
+                -in "${certificate}" \
+                -noout \
+                -issuer \
+                -nameopt RFC2253 |
+              sed 's/^issuer=//'
+            )"
+            
+            serial_number="$(
+              openssl x509 \
+                -in "${certificate}" \
+                -noout \
+                -serial |
+              sed 's/^serial=//' |
+              tr '[:lower:]' '[:upper:]' |
+              sed 's/../&:/g; s/:$//'
+            )"
+            
+            not_before="$(
+              openssl x509 \
+                -in "${certificate}" \
+                -noout \
+                -startdate |
+              sed 's/^notBefore=//'
+            )"
+            
+            not_after="$(
+              openssl x509 \
+                -in "${certificate}" \
+                -noout \
+                -enddate |
+              sed 's/^notAfter=//'
+            )"
+            
+            sha256_fingerprint="$(
+              openssl x509 \
+                -in "${certificate}" \
+                -noout \
+                -fingerprint \
+                -sha256 |
+              sed 's/^sha256 Fingerprint=//' |
+              tr '[:lower:]' '[:upper:]'
+            )"
+            
+            sha1_fingerprint="$(
+              openssl x509 \
+                -in "${certificate}" \
+                -noout \
+                -fingerprint \
+                -sha1 |
+              sed 's/^sha1 Fingerprint=//' |
+              tr '[:lower:]' '[:upper:]'
+            )"
+            
+            # Use the certificate's CN as the header.
+            common_name="$(
+              openssl x509 \
+                -in "${certificate}" \
+                -noout \
+                -subject \
+                -nameopt RFC2253 |
+              sed 's/^subject=//' |
+              sed -n 's/^CN=\([^,]*\).*/\1/p'
+            )"
+            
+            {
+              echo "${common_name}"
+              printf '%*s\n' "${#common_name}" '' | tr ' ' '='
+              echo "# Issuer: ${issuer}"
+              echo "# Serial Number:${serial_number}"
+              echo "# Subject: ${subject}"
+              echo "# Not Valid Before: ${not_before}"
+              echo "# Not Valid After : ${not_after}"
+              echo "# Fingerprint (SHA-256): ${sha256_fingerprint}"
+              echo "# Fingerprint (SHA1): ${sha1_fingerprint}"
+              cat "${certificate}"
+              echo
+            } >> cacert.pem
+            
             echo "${fingerprint}" >> "${existing_fingerprints}"
-
+            
             custom_certificate_added=$((custom_certificate_added + 1))
           done
 
