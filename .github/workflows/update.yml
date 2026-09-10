@@ -210,12 +210,12 @@ jobs:
 
           shopt -s nullglob
 
-          # Only .crt files are considered custom CA certificates.
+          # Only .pem files are considered custom CA certificates.
           #
           # Sorting is important because it guarantees deterministic
           # output regardless of filesystem ordering.
           certificates=(
-            "${CUSTOM_CA_DIRECTORY}"/*.crt
+            "${CUSTOM_CA_DIRECTORY}"/*.pem
           )
 
           if [ "${#certificates[@]}" -gt 1 ]; then
