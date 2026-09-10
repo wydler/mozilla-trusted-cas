@@ -540,7 +540,6 @@ jobs:
       # ----------------------------------------------------------------------
       # Validate generated CA bundle
       # ----------------------------------------------------------------------
-
       - name: Validate generated CA bundle
         id: bundle
         shell: bash
@@ -567,7 +566,6 @@ jobs:
 
           echo "Certificate count: ${certificate_count}"
 
-
           # Validate that OpenSSL can parse the complete bundle.
           openssl crl2pkcs7 \
             -nocrl \
@@ -576,20 +574,17 @@ jobs:
             -print_certs \
             -noout
 
-
           # Verify that cacert.pem has no trailing whitespace.
           if grep -nE '[[:blank:]]+$' cacert.pem; then
             echo "::error::Trailing whitespace detected in cacert.pem"
             exit 1
           fi
 
-
           # Verify exactly one newline at EOF.
           if [ "$(tail -c 1 cacert.pem | wc -l)" -ne 1 ]; then
             echo "::error::cacert.pem does not end with exactly one newline"
             exit 1
           fi
-
 
           sha256="$(
             sha256sum cacert.pem |
@@ -605,71 +600,71 @@ jobs:
 
 
       # ----------------------------------------------------------------------
-      # Detect changes
+      # Detect CA bundle changes
+      #
+      # Only changes to cacert.pem determine whether an update is required.
+      # metadata.json is deliberately ignored here because generated_at is
+      # updated only after an actual CA bundle change has been detected.
       # ----------------------------------------------------------------------
-
-      - name: Check for changes
+      - name: Check for CA bundle changes
         id: changes
         shell: bash
         run: |
           set -euo pipefail
 
-          echo "Git status before change detection:"
-          git status --short
+          new_sha256="${{ steps.bundle.outputs.sha256 }}"
 
-          echo
+          echo "Generated CA bundle SHA256:"
+          echo "${new_sha256}"
 
-          # Check tracked modifications, staged modifications and
-          # newly created files.
-          if git diff --no-ext-diff --quiet -- cacert.pem metadata.json &&
-             git diff --no-ext-diff --cached --quiet -- cacert.pem metadata.json &&
-             [ -z "$(git ls-files --others --exclude-standard -- cacert.pem metadata.json)" ]; then
-
-            echo "No changes detected."
-
-            echo "changed=false" >> "${GITHUB_OUTPUT}"
-
-          else
-
-            echo "Changes detected."
-
-            echo "changed=true" >> "${GITHUB_OUTPUT}"
-
+          if [ ! -f cacert.pem ]; then
+            echo "::error::Generated cacert.pem does not exist"
+            exit 1
           fi
+
+          # Compare the generated bundle against the version currently
+          # tracked by Git. The generated file is already present in the
+          # working tree, so obtain the committed version directly from Git.
+          if git cat-file -e HEAD:cacert.pem 2>/dev/null; then
+            current_sha256="$(
+              git show HEAD:cacert.pem |
+              sha256sum |
+              awk '{print $1}'
+            )"
+
+            echo "Current CA bundle SHA256:"
+            echo "${current_sha256}"
+
+            if [ "${new_sha256}" = "${current_sha256}" ]; then
+              echo "CA bundle unchanged."
+              echo "changed=false" >> "${GITHUB_OUTPUT}"
+              exit 0
+            fi
+
+            echo "CA bundle changed."
+          else
+            echo "No existing cacert.pem found."
+            echo "CA bundle will be created."
+          fi
+
+          echo "changed=true" >> "${GITHUB_OUTPUT}"
 
 
       # ----------------------------------------------------------------------
       # Generate metadata
+      #
+      # Only executed when cacert.pem actually changed.
+      # generated_at therefore cannot cause an update by itself.
       # ----------------------------------------------------------------------
-
-      - name: Generate metadata
+      - name: Generate metadata.json
+        if: steps.changes.outputs.changed == 'true'
         shell: bash
         run: |
           set -euo pipefail
 
-          previous_generated_at=""
-          previous_bundle_sha256=""
-
-          if [ -f metadata.json ]; then
-            previous_generated_at="$(
-              jq -r '.generated_at // empty' metadata.json
-            )"
-
-            previous_bundle_sha256="$(
-              jq -r '.bundle.sha256 // empty' metadata.json
-            )"
-          fi
-
-          current_bundle_sha256="${{ steps.bundle.outputs.sha256 }}"
-
-          if [ "${current_bundle_sha256}" = "${previous_bundle_sha256}" ] &&
-             [ -n "${previous_generated_at}" ]; then
-            generated_at="${previous_generated_at}"
-          else
-            generated_at="$(
-              date --utc '+%Y-%m-%dT%H:%M:%SZ'
-            )"
-          fi
+          generated_at="$(
+            date --utc '+%Y-%m-%dT%H:%M:%SZ'
+          )"
 
           jq -n \
             --arg source_name \
@@ -737,7 +732,6 @@ jobs:
       # ----------------------------------------------------------------------
       # Validate Git changes
       # ----------------------------------------------------------------------
-
       - name: Validate changes
         if: steps.changes.outputs.changed == 'true'
         shell: bash
@@ -766,7 +760,6 @@ jobs:
       # ----------------------------------------------------------------------
       # Show changes
       # ----------------------------------------------------------------------
-
       - name: Show changes
         if: steps.changes.outputs.changed == 'true'
         shell: bash
