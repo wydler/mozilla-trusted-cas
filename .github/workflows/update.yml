@@ -422,12 +422,24 @@ jobs:
         run: |
           set -euo pipefail
       
-          if git diff --quiet -- cacert.pem; then
-            echo "changed=false" >> "${GITHUB_OUTPUT}"
-            echo "No changes detected in cacert.pem."
+          if git ls-files --error-unmatch cacert.pem >/dev/null 2>&1; then
+            # cacert.pem is already tracked.
+            if git diff --quiet -- cacert.pem; then
+              echo "changed=false" >> "${GITHUB_OUTPUT}"
+              echo "No changes detected in cacert.pem."
+            else
+              echo "changed=true" >> "${GITHUB_OUTPUT}"
+              echo "Changes detected in cacert.pem."
+            fi
           else
-            echo "changed=true" >> "${GITHUB_OUTPUT}"
-            echo "Changes detected in cacert.pem."
+            # cacert.pem does not exist in Git yet.
+            if [ -s cacert.pem ]; then
+              echo "changed=true" >> "${GITHUB_OUTPUT}"
+              echo "cacert.pem is new and will be added."
+            else
+              echo "::error::cacert.pem does not exist or is empty."
+              exit 1
+            fi
           fi
 
 
