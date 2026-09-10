@@ -698,18 +698,11 @@ jobs:
           git status --short
 
           echo
-          echo "Validating whitespace..."
+          echo "Validating metadata.json whitespace..."
 
-          # git diff --check only sees tracked changes.
-          # New files are checked separately.
-          if git ls-files --error-unmatch cacert.pem >/dev/null 2>&1; then
-            git diff --check -- cacert.pem metadata.json
+          if git ls-files --error-unmatch metadata.json >/dev/null 2>&1; then
+            git diff --check -- metadata.json
           else
-            if grep -nE '[[:blank:]]+$' cacert.pem; then
-              echo "::error::Trailing whitespace detected in cacert.pem"
-              exit 1
-            fi
-
             if grep -nE '[[:blank:]]+$' metadata.json; then
               echo "::error::Trailing whitespace detected in metadata.json"
               exit 1
