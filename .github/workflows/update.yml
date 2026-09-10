@@ -185,7 +185,7 @@ jobs:
       # Generate Mozilla CA bundle
       # ----------------------------------------------------------------------
 
-      - name: Generate Mozilla cacert.pem
+      - name: Generate Mozilla CA bundle
         shell: bash
         run: |
           set -euo pipefail
@@ -193,9 +193,34 @@ jobs:
           ./mk-ca-bundle.pl \
             -m \
             -n \
-            cacert.pem
+            mozilla-cacert.pem
 
-          test -s cacert.pem
+          test -s mozilla-cacert.pem
+
+      - name: Validate Mozilla CA bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          test -s mozilla-cacert.pem
+
+          certificate_count="$(
+            grep -c '^-----BEGIN CERTIFICATE-----$' mozilla-cacert.pem
+          )"
+
+          if [ "${certificate_count}" -eq 0 ]; then
+            echo "::error::Mozilla CA bundle contains no certificates"
+            exit 1
+          fi
+
+          echo "Mozilla certificates: ${certificate_count}"
+
+          openssl crl2pkcs7 \
+            -nocrl \
+            -certfile mozilla-cacert.pem |
+          openssl pkcs7 \
+            -print_certs \
+            -noout
 
 
       # ----------------------------------------------------------------------
@@ -266,7 +291,7 @@ jobs:
               close(file)
               file=""
             }
-          ' cacert.pem
+          ' mozilla-cacert.pem
 
 
           # ------------------------------------------------------------------
@@ -291,6 +316,13 @@ jobs:
               tr '[:lower:]' '[:upper:]' \
               >> "${existing_fingerprints}"
           done
+
+
+          # ------------------------------------------------------------------
+          # Start final bundle with the freshly generated Mozilla bundle.
+          # ------------------------------------------------------------------
+
+          cp mozilla-cacert.pem cacert.pem
 
 
           # ------------------------------------------------------------------
@@ -611,15 +643,34 @@ jobs:
       # Generate metadata
       # ----------------------------------------------------------------------
 
-      - name: Generate metadata.json
-        if: steps.changes.outputs.changed == 'true'
+      - name: Generate metadata
         shell: bash
         run: |
           set -euo pipefail
 
-          generated_at="$(
-            date --utc '+%Y-%m-%dT%H:%M:%SZ'
-          )"
+          previous_generated_at=""
+          previous_bundle_sha256=""
+
+          if [ -f metadata.json ]; then
+            previous_generated_at="$(
+              jq -r '.generated_at // empty' metadata.json
+            )"
+
+            previous_bundle_sha256="$(
+              jq -r '.bundle.sha256 // empty' metadata.json
+            )"
+          fi
+
+          current_bundle_sha256="${{ steps.bundle.outputs.sha256 }}"
+
+          if [ "${current_bundle_sha256}" = "${previous_bundle_sha256}" ] &&
+             [ -n "${previous_generated_at}" ]; then
+            generated_at="${previous_generated_at}"
+          else
+            generated_at="$(
+              date --utc '+%Y-%m-%dT%H:%M:%SZ'
+            )"
+          fi
 
           jq -n \
             --arg source_name \
