@@ -150,7 +150,7 @@ jobs:
           shopt -s nullglob
 
           certificates=(
-            "${CUSTOM_CA_DIRECTORY}"/*.pem
+            "${CUSTOM_CA_DIRECTORY}"/*.crt
           )
 
           custom_certificate_count=0
