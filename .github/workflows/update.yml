@@ -338,6 +338,7 @@ jobs:
             )"
             
             {
+              echo
               echo "${common_name}"
               printf '%*s\n' "${#common_name}" '' | tr ' ' '='
               echo "# Issuer: ${issuer}"
@@ -347,7 +348,8 @@ jobs:
               echo "# Not Valid After : ${not_after}"
               echo "# Fingerprint (SHA-256): ${sha256_fingerprint}"
               echo "# Fingerprint (SHA1): ${sha1_fingerprint}"
-              cat "${certificate}"
+            
+              sed '/^$/d' "${certificate}"
               # echo
             } >> cacert.pem
             
