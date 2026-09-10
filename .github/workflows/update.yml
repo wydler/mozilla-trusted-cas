@@ -553,7 +553,7 @@ jobs:
           branch: "${{ steps.metadata.outputs.gh_branch_name }}"
           delete-branch: true
           commit-message: "chore: update Mozilla CA bundle"
-          title: "chore: update Mozilla CA bundle (${{ steps.metadata.outputs.version_full }}"
+          title: "chore: update Mozilla CA bundle (${{ steps.metadata.outputs.version_full }})"
           body: |
             ## Mozilla CA bundle update
 
