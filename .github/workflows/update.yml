@@ -415,6 +415,22 @@ jobs:
           echo "CA bundle SHA256:"
           echo "${sha256}"
 
+
+      - name: Check for bundle changes
+        id: changes
+        shell: bash
+        run: |
+          set -euo pipefail
+      
+          if git diff --quiet -- cacert.pem; then
+            echo "changed=false" >> "${GITHUB_OUTPUT}"
+            echo "No changes detected in cacert.pem."
+          else
+            echo "changed=true" >> "${GITHUB_OUTPUT}"
+            echo "Changes detected in cacert.pem."
+          fi
+
+
       - name: Generate metadata.json
         if: steps.changes.outputs.changed == 'true'
         run: |
@@ -504,19 +520,6 @@ jobs:
 
           jq . metadata.json
 
-      - name: Check for bundle changes
-        id: changes
-        shell: bash
-        run: |
-          set -euo pipefail
-      
-          if git diff --quiet -- cacert.pem; then
-            echo "changed=false" >> "${GITHUB_OUTPUT}"
-            echo "No changes detected in cacert.pem."
-          else
-            echo "changed=true" >> "${GITHUB_OUTPUT}"
-            echo "Changes detected in cacert.pem."
-          fi
 
       - name: Validate changes
         if: steps.changes.outputs.changed == 'true'
