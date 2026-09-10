@@ -191,6 +191,7 @@ jobs:
           set -euo pipefail
 
           ./mk-ca-bundle.pl \
+            -m \          
             -n \
             mozilla-cacert.pem
 
