@@ -503,15 +503,18 @@ jobs:
 
           jq . metadata.json
 
-      - name: Check for changes
+      - name: Check for bundle changes
         id: changes
+        shell: bash
         run: |
-          if git diff --quiet -- cacert.pem metadata.json; then
+          set -euo pipefail
+      
+          if git diff --quiet -- cacert.pem; then
             echo "changed=false" >> "${GITHUB_OUTPUT}"
-            echo "No changes detected."
+            echo "No changes detected in cacert.pem."
           else
             echo "changed=true" >> "${GITHUB_OUTPUT}"
-            echo "Changes detected."
+            echo "Changes detected in cacert.pem."
           fi
 
       - name: Validate changes
