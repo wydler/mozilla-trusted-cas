@@ -238,9 +238,7 @@ jobs:
             if grep -Fxq "${fingerprint}" "${existing_fingerprints}"; then
               echo "Certificate already exists in cacert.pem. Skipping."
 
-              custom_certificate_duplicate=$(
-                (custom_certificate_duplicate + 1)
-              )
+              custom_certificate_duplicate=$((custom_certificate_duplicate + 1))
 
               continue
             fi
