@@ -19,8 +19,8 @@
   },
   "bundle": {
     "file": "cacert.pem",
-    "sha256": "fb441266e86aaf4a68222c108ee4bfa52ac73f2c5f29357119450e036a30efec",
+    "sha256": "f3bf465eda48900fe1cae0795c02f3e379ed1693bdf7f0c9a73fa644ccd7cf54",
     "certificate_count": 122
   },
-  "generated_at": "2026-09-10T08:56:39Z"
+  "generated_at": "2026-09-10T11:07:32Z"
 }
