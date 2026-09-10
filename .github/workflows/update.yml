@@ -416,6 +416,7 @@ jobs:
           echo "${sha256}"
 
       - name: Generate metadata.json
+        if: steps.changes.outputs.changed == 'true'
         run: |
           previous_generated_at=""
           previous_bundle_sha256=""
