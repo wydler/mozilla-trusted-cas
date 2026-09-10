@@ -63,6 +63,7 @@ jobs:
           # GitHub Outputs
           {
             echo "gh_branch_name=${gh_branch_name}"
+            echo "version_full=${version_full}"
           } >> "$GITHUB_OUTPUT"
 
 
