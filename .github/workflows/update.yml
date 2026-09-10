@@ -20,6 +20,8 @@ env:
   # curl repository.
   CURL_REPOSITORY: 'https://github.com/curl/curl'
 
+  # Directory containing additional, locally trusted CA certificates.
+  CUSTOM_CA_DIRECTORY: 'custom-cas'
 
 jobs:
   update:
@@ -93,13 +95,14 @@ jobs:
               }
             ' mk-ca-bundle.pl
           )"
-      
+
           if [ -z "${version}" ]; then
             echo "::error::Unable to determine mk-ca-bundle.pl version"
             exit 1
           fi
-      
+
           echo "version=${version}" >> "${GITHUB_OUTPUT}"
+
           echo "mk-ca-bundle.pl version: ${version}"
           echo "curl commit: ${CURL_COMMIT}"
 
@@ -130,7 +133,7 @@ jobs:
           echo "Mozilla certdata.txt SHA256:"
           echo "${sha256}"
 
-      - name: Generate cacert.pem
+      - name: Generate Mozilla cacert.pem
         run: |
           ./mk-ca-bundle.pl \
             -m \
@@ -139,21 +142,171 @@ jobs:
 
           test -s cacert.pem
 
+      - name: Add custom CA certificates
+        id: custom_cas
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          shopt -s nullglob
+
+          certificates=(
+            "${CUSTOM_CA_DIRECTORY}"/*.pem
+          )
+
+          custom_certificate_count=0
+          custom_certificate_added=0
+          custom_certificate_duplicate=0
+
+          if [ "${#certificates[@]}" -eq 0 ]; then
+            echo "No custom CA certificates found in ${CUSTOM_CA_DIRECTORY}/"
+          else
+            echo "Found ${#certificates[@]} custom CA file(s)."
+          fi
+
+          # Create a temporary directory containing the certificates
+          # already present in the Mozilla bundle.
+          existing_dir="$(mktemp -d)"
+
+          cleanup() {
+            rm -rf "${existing_dir}"
+          }
+
+          trap cleanup EXIT
+
+          # Split the Mozilla bundle into individual certificates.
+          awk '
+            /-----BEGIN CERTIFICATE-----/ {
+              file=sprintf("'"${existing_dir}"'/cert-%05d.pem", ++n)
+            }
+
+            file != "" {
+              print > file
+            }
+
+            /-----END CERTIFICATE-----/ {
+              close(file)
+              file=""
+            }
+          ' cacert.pem
+
+          # Build a list of SHA-256 fingerprints already contained
+          # in the Mozilla bundle.
+          existing_fingerprints="${existing_dir}/fingerprints.txt"
+          touch "${existing_fingerprints}"
+
+          for certificate in "${existing_dir}"/*.pem; do
+            [ -f "${certificate}" ] || continue
+
+            openssl x509 \
+              -in "${certificate}" \
+              -noout \
+              -fingerprint \
+              -sha256 |
+              sed 's/^sha256 Fingerprint=//' |
+              tr -d ':' |
+              tr '[:lower:]' '[:upper:]' \
+              >> "${existing_fingerprints}"
+          done
+
+          for certificate in "${certificates[@]}"; do
+            custom_certificate_count=$((custom_certificate_count + 1))
+
+            echo
+            echo "Processing: ${certificate}"
+
+            # Verify that the file contains a valid X.509 certificate.
+            if ! openssl x509 \
+              -in "${certificate}" \
+              -noout; then
+              echo "::error::Invalid X.509 certificate: ${certificate}"
+              exit 1
+            fi
+
+            fingerprint="$(
+              openssl x509 \
+                -in "${certificate}" \
+                -noout \
+                -fingerprint \
+                -sha256 |
+              sed 's/^sha256 Fingerprint=//' |
+              tr -d ':' |
+              tr '[:lower:]' '[:upper:]'
+            )"
+
+            subject="$(
+              openssl x509 \
+                -in "${certificate}" \
+                -noout \
+                -subject |
+              sed 's/^subject=//'
+            )"
+
+            issuer="$(
+              openssl x509 \
+                -in "${certificate}" \
+                -noout \
+                -issuer |
+              sed 's/^issuer=//'
+            )"
+
+            echo "Subject: ${subject}"
+            echo "Issuer:  ${issuer}"
+            echo "SHA-256: ${fingerprint}"
+
+            if grep -Fxq "${fingerprint}" "${existing_fingerprints}"; then
+              echo "Certificate already exists in cacert.pem. Skipping."
+              custom_certificate_duplicate=$((custom_certificate_duplicate + 1))
+              continue
+            fi
+
+            echo "Adding certificate to cacert.pem."
+
+            cat "${certificate}" >> cacert.pem
+            printf '\n' >> cacert.pem
+
+            echo "${fingerprint}" >> "${existing_fingerprints}"
+
+            custom_certificate_added=$((custom_certificate_added + 1))
+          done
+
+          {
+            echo "certificate_count=${custom_certificate_count}"
+            echo "added_count=${custom_certificate_added}"
+            echo "duplicate_count=${custom_certificate_duplicate}"
+          } >> "${GITHUB_OUTPUT}"
+
+          echo
+          echo "Custom CA certificates:"
+          echo "  Found:      ${custom_certificate_count}"
+          echo "  Added:      ${custom_certificate_added}"
+          echo "  Duplicates: ${custom_certificate_duplicate}"
+
       - name: Validate generated CA bundle
         id: bundle
+        shell: bash
         run: |
+          set -euo pipefail
+
           certificate_count="$(
             grep -c '^-----BEGIN CERTIFICATE-----$' cacert.pem
           )"
-          
+
           end_certificate_count="$(
             grep -c '^-----END CERTIFICATE-----$' cacert.pem
           )"
-          
+
           if [ "${certificate_count}" -ne "${end_certificate_count}" ]; then
             echo "::error::Mismatched certificate markers"
             exit 1
           fi
+
+          if [ "${certificate_count}" -eq 0 ]; then
+            echo "::error::CA bundle does not contain any certificates"
+            exit 1
+          fi
+
+          echo "Certificate count: ${certificate_count}"
 
           openssl crl2pkcs7 \
             -nocrl \
@@ -170,27 +323,27 @@ jobs:
           echo "certificate_count=${certificate_count}" >> "${GITHUB_OUTPUT}"
           echo "sha256=${sha256}" >> "${GITHUB_OUTPUT}"
 
+          echo
           echo "CA bundle SHA256:"
           echo "${sha256}"
-
 
       - name: Generate metadata.json
         run: |
           previous_generated_at=""
           previous_bundle_sha256=""
-      
+
           if [ -f metadata.json ]; then
             previous_generated_at="$(
               jq -r '.generated_at // empty' metadata.json
             )"
-      
+
             previous_bundle_sha256="$(
               jq -r '.bundle.sha256 // empty' metadata.json
             )"
           fi
-      
+
           current_bundle_sha256="${{ steps.bundle.outputs.sha256 }}"
-      
+
           if [ "${current_bundle_sha256}" = "${previous_bundle_sha256}" ] &&
              [ -n "${previous_generated_at}" ]; then
             generated_at="${previous_generated_at}"
@@ -199,7 +352,7 @@ jobs:
               date --utc '+%Y-%m-%dT%H:%M:%SZ'
             )"
           fi
-      
+
           jq -n \
             --arg source_name \
               "Mozilla NSS Root Certificate Store" \
@@ -217,12 +370,20 @@ jobs:
               "${CURL_COMMIT}" \
             --arg generator_version \
               "${{ steps.generator.outputs.version }}" \
+            --arg custom_ca_directory \
+              "${CUSTOM_CA_DIRECTORY}" \
             --arg bundle_file \
               "cacert.pem" \
             --arg bundle_sha256 \
               "${{ steps.bundle.outputs.sha256 }}" \
             --argjson certificate_count \
               "${{ steps.bundle.outputs.certificate_count }}" \
+            --argjson custom_certificate_count \
+              "${{ steps.custom_cas.outputs.certificate_count }}" \
+            --argjson custom_certificate_added \
+              "${{ steps.custom_cas.outputs.added_count }}" \
+            --argjson custom_certificate_duplicate \
+              "${{ steps.custom_cas.outputs.duplicate_count }}" \
             --arg generated_at \
               "${generated_at}" \
             '{
@@ -238,6 +399,12 @@ jobs:
                 commit: $generator_commit,
                 version: $generator_version
               },
+              custom_cas: {
+                directory: $custom_ca_directory,
+                certificate_count: $custom_certificate_count,
+                added_count: $custom_certificate_added,
+                duplicate_count: $custom_certificate_duplicate
+              },
               bundle: {
                 file: $bundle_file,
                 sha256: $bundle_sha256,
@@ -245,9 +412,8 @@ jobs:
               },
               generated_at: $generated_at
             }' > metadata.json
-      
+
           jq . metadata.json
-    
 
       - name: Check for changes
         id: changes
@@ -265,12 +431,10 @@ jobs:
         run: |
           git diff --check
 
-
       - name: Show changes
         if: steps.changes.outputs.changed == 'true'
         run: |
           git diff --stat -- cacert.pem metadata.json
-
 
       - name: Create pull request
         if: steps.changes.outputs.changed == 'true'
@@ -285,8 +449,8 @@ jobs:
           body: |
             ## Mozilla CA bundle update
 
-            This PR updates the Mozilla CA bundle generated from
-            the Mozilla NSS `certdata.txt`.
+            This PR updates the CA bundle generated from the
+            Mozilla NSS `certdata.txt`.
 
             ### Source
 
@@ -297,6 +461,20 @@ jobs:
             `mk-ca-bundle.pl`
             curl commit: `${{ env.CURL_COMMIT }}`
             version: `${{ steps.generator.outputs.version }}`
+
+            ### Custom CA certificates
+
+            Directory:
+            `${{ env.CUSTOM_CA_DIRECTORY }}/`
+
+            Found:
+            `${{ steps.custom_cas.outputs.certificate_count }}`
+
+            Added:
+            `${{ steps.custom_cas.outputs.added_count }}`
+
+            Already present:
+            `${{ steps.custom_cas.outputs.duplicate_count }}`
 
             ### Bundle
 
