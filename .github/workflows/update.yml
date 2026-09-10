@@ -263,7 +263,7 @@ jobs:
             echo "Adding certificate to cacert.pem."
 
             cat "${certificate}" >> cacert.pem
-            printf '\n' >> cacert.pem
+            # printf '\n' >> cacert.pem
 
             echo "${fingerprint}" >> "${existing_fingerprints}"
 
