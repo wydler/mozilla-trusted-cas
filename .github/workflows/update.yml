@@ -601,12 +601,13 @@ jobs:
       # ----------------------------------------------------------------------
       # Detect changes
       #
-      # The Mozilla certdata.txt SHA256 is the authoritative indicator for
-      # Mozilla CA bundle changes.
+      # Compare the actual certificate content instead of cacert.pem as a
+      # complete file.
       #
-      # The generated cacert.pem contains a timestamp from mk-ca-bundle.pl,
-      # which changes on every run and must therefore NOT be used to detect
-      # CA changes.
+      # mk-ca-bundle.pl adds a generation timestamp to cacert.pem, which must
+      # not trigger an update.
+      #
+      # Custom CA additions/removals must, however, trigger an update.
       # ----------------------------------------------------------------------
       - name: Check for changes
         id: changes
@@ -614,47 +615,127 @@ jobs:
         run: |
           set -euo pipefail
 
-          new_source_sha256="${{ steps.source.outputs.sha256 }}"
+          echo "Git status before change detection:"
+          git status --short
 
-          echo "Mozilla certdata.txt SHA256:"
-          echo "${new_source_sha256}"
+          # Create a normalized certificate fingerprint list from a PEM bundle.
+          #
+          # The result contains one SHA-256 fingerprint per certificate,
+          # sorted deterministically. Headers, timestamps, comments and
+          # certificate ordering are therefore irrelevant.
+          certificate_fingerprints() {
+            local bundle="$1"
 
-          if [ ! -f metadata.json ]; then
-            echo "No existing metadata.json found."
-            echo "Changes detected."
+            awk '
+              /-----BEGIN CERTIFICATE-----/ {
+                certificate=""
+                inside=1
+              }
 
-            echo "changed=true" >> "${GITHUB_OUTPUT}"
-            exit 0
-          fi
+              inside {
+                certificate = certificate $0 "\n"
+              }
 
-          current_source_sha256="$(
-            jq -r '.source.sha256 // empty' metadata.json
+              /-----END CERTIFICATE-----/ {
+                printf "%s", certificate
+                inside=0
+              }
+            ' "${bundle}" |
+            awk '
+              /-----BEGIN CERTIFICATE-----/ {
+                file=sprintf("/tmp/certificate-%05d.pem", ++n)
+              }
+
+              file != "" {
+                print > file
+              }
+
+              /-----END CERTIFICATE-----/ {
+                close(file)
+                file=""
+              }
+
+              END {
+                for (i = 1; i <= n; i++) {
+                  file=sprintf("/tmp/certificate-%05d.pem", i)
+
+                  command="openssl x509 -in " file " -noout -fingerprint -sha256 2>/dev/null"
+
+                  command | getline fingerprint
+                  close(command)
+
+                  sub(/^sha256 Fingerprint=/, "", fingerprint)
+                  gsub(/:/, "", fingerprint)
+                  print toupper(fingerprint)
+
+                  system("rm -f " file)
+                }
+              }
+            ' |
+            sort
+          }
+
+          # Calculate fingerprints for the newly generated bundle.
+          generated_fingerprints="$(
+            mktemp
           )"
 
-          echo
-          echo "Stored Mozilla certdata.txt SHA256:"
-          echo "${current_source_sha256}"
+          trap 'rm -f "${generated_fingerprints}" "${current_fingerprints}"' EXIT
 
-          if [ -z "${current_source_sha256}" ]; then
-            echo "::warning::metadata.json does not contain a source SHA256."
+          certificate_fingerprints cacert.pem \
+            > "${generated_fingerprints}"
+
+          echo "Generated certificate fingerprints:"
+          cat "${generated_fingerprints}"
+
+          # If there is no committed cacert.pem, this is necessarily an
+          # initial bundle creation.
+          if ! git cat-file -e HEAD:cacert.pem 2>/dev/null; then
+            echo
+            echo "No existing cacert.pem found."
             echo "Changes detected."
 
             echo "changed=true" >> "${GITHUB_OUTPUT}"
             exit 0
           fi
 
-          if [ "${new_source_sha256}" = "${current_source_sha256}" ]; then
+          # Extract the committed cacert.pem.
+          current_bundle="$(
+            mktemp
+          )"
+
+          git show HEAD:cacert.pem > "${current_bundle}"
+
+          current_fingerprints="$(
+            mktemp
+          )"
+
+          certificate_fingerprints "${current_bundle}" \
+            > "${current_fingerprints}"
+
+          rm -f "${current_bundle}"
+
+          echo
+          echo "Current certificate fingerprints:"
+          cat "${current_fingerprints}"
+
+          echo
+          echo "Comparing certificate fingerprints..."
+
+          if cmp --silent \
+            "${generated_fingerprints}" \
+            "${current_fingerprints}"; then
+
             echo
-            echo "Mozilla certdata.txt unchanged."
-            echo "No CA bundle update required."
+            echo "No certificate changes detected."
+            echo "Timestamp-only changes are ignored."
 
             echo "changed=false" >> "${GITHUB_OUTPUT}"
             exit 0
           fi
 
           echo
-          echo "Mozilla certdata.txt changed."
-          echo "CA bundle update required."
+          echo "Certificate changes detected."
 
           echo "changed=true" >> "${GITHUB_OUTPUT}"
 
