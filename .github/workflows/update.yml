@@ -278,7 +278,7 @@ jobs:
 
           : > "${existing_fingerprints}"
 
-          for certificate in "${existing_dir}"/*.crt; do
+          for certificate in "${existing_dir}"/*.pem; do
             [ -f "${certificate}" ] || continue
 
             openssl x509 \
