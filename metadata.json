@@ -14,8 +14,8 @@
   "custom_cas": {
     "directory": "custom-cas",
     "certificate_count": 1,
-    "added_count": 1,
-    "duplicate_count": 0
+    "added_count": 0,
+    "duplicate_count": 1
   },
   "bundle": {
     "file": "cacert.pem",
