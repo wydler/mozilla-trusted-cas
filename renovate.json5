@@ -16,12 +16,8 @@
     'github-actions',
     'custom.regex',
   ],
-
   packageRules: [
     {
-      // ===========================================================================
-      // Curl
-      // ===========================================================================
       matchDatasources: [
         'github-tags',
       ],
@@ -39,15 +35,11 @@
       commitMessageExtra: '{{#if newVersion}}from {{currentVersion}} to {{newVersion}}{{else}}{{newValue}} from {{currentDigestShort}} to {{newDigestShort}}{{/if}}',
     },
   ],
-
   customManagers: [
     {
-      // ===========================================================================
-      // Curl
-      // ===========================================================================
       customType: 'regex',
-      fileMatch: [
-        '^\\.github/workflows/[^/]+\\.ya?ml$',
+      managerFilePatterns: [
+        '/^\\.github/workflows/[^/]+\\.ya?ml$/',
       ],
       matchStrings: [
         '# renovate: datasource=github-tags depName=curl/curl\\s+CURL_COMMIT:\\s*[\'"](?<currentDigest>[0-9a-f]{40})[\'"]\\s+#\\s+(?<currentValue>curl-[0-9_]+)',
@@ -56,7 +48,7 @@
       depNameTemplate: 'curl/curl',
       versioningTemplate: 'semver',
       currentValueTemplate: '{{{currentValue}}}',
-      autoReplaceStringTemplate: '  # renovate: datasource=github-tags depName=curl/curl\n  CURL_COMMIT: \'{{{newDigest}}}\' # {{{newValue}}}',
+      autoReplaceStringTemplate: "  # renovate: datasource=github-tags depName=curl/curl\n  CURL_COMMIT: '{{{newDigest}}}' # {{{newValue}}}",
     },
   ],
 }
