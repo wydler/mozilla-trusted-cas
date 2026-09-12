@@ -55,7 +55,7 @@
       datasourceTemplate: 'github-tags',
       depNameTemplate: 'curl/curl',
       extractVersionTemplate: '^curl-(?<version>.*)$',
-      versioningTemplate: 'regex:^(?<major>\\d+)_(?<minor>\\d+)_(?<patch>\\d+)$',
+      versioningTemplate: 'loose',
       currentValueTemplate: '{{{currentValue}}}',
       autoReplaceStringTemplate: " # renovate: datasource=github-tags depName=curl/curl\n CURL_COMMIT: '{{{newDigest}}}' # {{{newValue}}}",
     },
