@@ -1,0 +1,40 @@
+{
+  extends: [
+    'config:recommended',
+    'helpers:pinGitHubActionDigests',
+  ],
+
+  minimumReleaseAge: '7 days',
+
+  packageRules: [
+    {
+      matchDatasources: [
+        'github-tags',
+      ],
+      matchPackageNames: [
+        'curl/curl',
+      ],
+      commitMessagePrefix: 'chore(deps):',
+    },
+  ],
+
+  customManagers: [
+    {
+      customType: 'regex',
+
+      managerFilePatterns: [
+        '/^\\.github/workflows/.*\\.ya?ml$/',
+      ],
+
+      matchStrings: [
+        '# renovate: datasource=github-tags depName=curl/curl\\s+CURL_VERSION:\\s*[\'"](?<currentValue>[^\'"]+)[\'"]\\s+CURL_COMMIT:\\s*[\'"](?<currentDigest>[0-9a-f]{40})[\'"]',
+      ],
+
+      datasourceTemplate: 'github-tags',
+      depNameTemplate: 'curl/curl',
+      versioningTemplate: 'semver',
+
+      autoReplaceStringTemplate: '  # renovate: datasource=github-tags depName=curl/curl\n  CURL_VERSION: \'{{{newValue}}}\'\n  CURL_COMMIT: \'{{{newDigest}}}\'',
+    },
+  ],
+}
