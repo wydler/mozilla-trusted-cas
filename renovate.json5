@@ -46,7 +46,7 @@
       // Curl
       // ===========================================================================
       customType: 'regex',
-      fileMatch: [
+      managerFilePatterns: [
         '^\\.github/workflows/[^/]+\\.ya?ml$',
       ],
       matchStrings: [
@@ -56,7 +56,7 @@
       depNameTemplate: 'curl/curl',
       versioningTemplate: 'semver',
       currentValueTemplate: '{{{currentValue}}}',
-      autoReplaceStringTemplate: '  # renovate: datasource=github-tags depName=curl/curl\n  CURL_COMMIT: \'{{{newDigest}}}\' # {{{newValue}}}',
+      autoReplaceStringTemplate: " # renovate: datasource=github-tags depName=curl/curl\n CURL_COMMIT: '{{{newDigest}}}' # {{{newValue}}}",
     },
   ],
 }
