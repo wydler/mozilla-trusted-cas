@@ -50,7 +50,7 @@
         '/^\\.github\\/workflows\\/update\\.ya?ml$/',
       ],
       matchStrings: [
-        '\\s*# renovate: datasource=github-tags depName=curl/curl\\s+CURL_COMMIT:\\s*[\'"](?<currentDigest>[0-9a-f]{40})[\'"]\\s+#\\s+(?<currentValue>curl-[0-9_]+)',
+        '\\s*# renovate: datasource=github-tags depName=curl/curl\\s+CURL_VERSION:\\s*[\'"][0-9.]+[\'"]\\s+#\\s+(?<currentValue>curl-[0-9_]+)\\s+\\s*#.*\\s+CURL_COMMIT:\\s*[\'"](?<currentDigest>[0-9a-f]{40})[\'"]',
       ],
       datasourceTemplate: 'github-tags',
       depNameTemplate: 'curl/curl',
