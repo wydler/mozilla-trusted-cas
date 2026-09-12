@@ -11,9 +11,11 @@ permissions:
   pull-requests: write
 
 env:
-  # Pinned curl release commit containing mk-ca-bundle.pl.
   # renovate: datasource=github-tags depName=curl/curl
-  CURL_COMMIT: '68720b4837284335b2d63cb358f8f6ce65f5bc55'  # curl-8_21_0
+  CURL_VERSION: '8.21.0' # curl-8_21_0
+  
+  # Pinned curl release commit containing mk-ca-bundle.pl.
+  CURL_COMMIT: '68720b4837284335b2d63cb358f8f6ce65f5bc55'
 
   # Mozilla NSS certdata source.
   CERTDATA_URL: 'https://hg.mozilla.org/releases/mozilla-release/raw-file/default/security/nss/lib/ckfw/builtins/certdata.txt'
