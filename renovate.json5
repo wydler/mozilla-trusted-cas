@@ -34,7 +34,7 @@
       depNameTemplate: 'curl/curl',
       versioningTemplate: 'semver',
 
-      autoReplaceStringTemplate: '  # renovate: datasource=github-tags depName=curl/curl\n  CURL_VERSION: \'{{{newValue}}}\'\n  CURL_COMMIT: \'{{{newDigest}}}\'',
+      autoReplaceStringTemplate: '# renovate: datasource=github-tags depName=curl/curl\n  CURL_VERSION: \'{{{newValue}}}\'\n  CURL_COMMIT: \'{{{newDigest}}}\'',
     },
   ],
 }
