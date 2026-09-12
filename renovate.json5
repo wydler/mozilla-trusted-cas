@@ -1,42 +1,61 @@
 {
+  $schema: 'https://docs.renovatebot.com/renovate-schema.json',
   extends: [
     'config:recommended',
     'helpers:pinGitHubActionDigests',
   ],
-
+  commitMessagePrefix: 'chore(deps):',
+  timezone: 'Europe/Berlin',
+  prHourlyLimit: 0,
+  prConcurrentLimit: 0,
+  automerge: false,
   minimumReleaseAge: '7 days',
+  minimumReleaseAgeBehaviour: 'timestamp-required',
+  internalChecksFilter: 'strict',
+  enabledManagers: [
+    'github-actions',
+    'custom.regex',
+  ],
 
   packageRules: [
     {
+      // ===========================================================================
+      // Curl
+      // ===========================================================================
       matchDatasources: [
         'github-tags',
       ],
       matchPackageNames: [
         'curl/curl',
       ],
-      commitMessagePrefix: 'chore(deps):',
+      labels: [
+        'dependencies',
+        'github_actions',
+      ],
+      draftPR: true,
+      additionalBranchPrefix: 'github_action/',
+      branchTopic: '{{depNameSanitized}}-{{#if newVersion}}{{newVersion}}{{else}}{{currentValue}}-{{newDigest}}{{/if}}',
+      commitMessageTopic: '{{depName}}',
+      commitMessageExtra: '{{#if newVersion}}from {{currentVersion}} to {{newVersion}}{{else}}{{newValue}} from {{currentDigestShort}} to {{newDigestShort}}{{/if}}',
     },
   ],
 
   customManagers: [
     {
+      // ===========================================================================
+      // Curl
+      // ===========================================================================
       customType: 'regex',
-
       fileMatch: [
         '^\\.github/workflows/[^/]+\\.ya?ml$',
       ],
-
       matchStrings: [
         '# renovate: datasource=github-tags depName=curl/curl\\s+CURL_COMMIT:\\s*[\'"](?<currentDigest>[0-9a-f]{40})[\'"]\\s+#\\s+(?<currentValue>curl-[0-9_]+)',
       ],
-
       datasourceTemplate: 'github-tags',
       depNameTemplate: 'curl/curl',
-
       versioningTemplate: 'semver',
-
       currentValueTemplate: '{{{currentValue}}}',
-
       autoReplaceStringTemplate: '  # renovate: datasource=github-tags depName=curl/curl\n  CURL_COMMIT: \'{{{newDigest}}}\' # {{{newValue}}}',
     },
   ],
