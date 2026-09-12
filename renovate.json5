@@ -22,19 +22,22 @@
     {
       customType: 'regex',
 
-      managerFilePatterns: [
-        '/^\\.github/workflows/.*\\.ya?ml$/',
+      fileMatch: [
+        '^\\.github/workflows/[^/]+\\.ya?ml$',
       ],
 
       matchStrings: [
-        '# renovate: datasource=github-tags depName=curl/curl\\s+CURL_VERSION:\\s*[\'"](?<currentValue>[^\'"]+)[\'"]\\s+CURL_COMMIT:\\s*[\'"](?<currentDigest>[0-9a-f]{40})[\'"]',
+        '# renovate: datasource=github-tags depName=curl/curl\\s+CURL_COMMIT:\\s*[\'"](?<currentDigest>[0-9a-f]{40})[\'"]\\s+#\\s+(?<currentValue>curl-[0-9_]+)',
       ],
 
       datasourceTemplate: 'github-tags',
       depNameTemplate: 'curl/curl',
+
       versioningTemplate: 'semver',
 
-      autoReplaceStringTemplate: '# renovate: datasource=github-tags depName=curl/curl\n  CURL_VERSION: \'{{{newValue}}}\'\n  CURL_COMMIT: \'{{{newDigest}}}\'',
+      currentValueTemplate: '{{{currentValue}}}',
+
+      autoReplaceStringTemplate: '  # renovate: datasource=github-tags depName=curl/curl\n  CURL_COMMIT: \'{{{newDigest}}}\' # {{{newValue}}}',
     },
   ],
 }
