@@ -12,6 +12,7 @@ permissions:
 
 env:
   # Pinned curl release commit containing mk-ca-bundle.pl.
+  CURL_VERSION: '8.22.0'
   CURL_COMMIT: '01346829096c61b372692f6dc43ffa778c6caccd'
 
   # Mozilla NSS certdata source.
