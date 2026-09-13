@@ -632,54 +632,38 @@ jobs:
           # certificate ordering are therefore irrelevant.
           certificate_fingerprints() {
             local bundle="$1"
-
-            awk '
+            local temp_dir
+          
+            temp_dir="$(mktemp -d)"
+          
+            awk -v temp_dir="$temp_dir" '
               /-----BEGIN CERTIFICATE-----/ {
-                certificate=""
-                inside=1
+                in_cert=1
+                cert++
+                file=sprintf("%s/certificate-%05d.pem", temp_dir, cert)
               }
-
-              inside {
-                certificate = certificate $0 "\n"
-              }
-
-              /-----END CERTIFICATE-----/ {
-                printf "%s", certificate
-                inside=0
-              }
-            ' "${bundle}" |
-            awk '
-              /-----BEGIN CERTIFICATE-----/ {
-                file=sprintf("/tmp/certificate-%05d.pem", ++n)
-              }
-
-              file != "" {
+          
+              in_cert {
                 print > file
               }
-
+          
               /-----END CERTIFICATE-----/ {
                 close(file)
-                file=""
+                in_cert=0
               }
-
-              END {
-                for (i = 1; i <= n; i++) {
-                  file=sprintf("/tmp/certificate-%05d.pem", i)
-
-                  command="openssl x509 -in " file " -noout -fingerprint -sha256 2>/dev/null"
-
-                  command | getline fingerprint
-                  close(command)
-
-                  sub(/^sha256 Fingerprint=/, "", fingerprint)
-                  gsub(/:/, "", fingerprint)
-                  print toupper(fingerprint)
-
-                  system("rm -f " file)
-                }
-              }
-            ' |
-            sort
+            ' "$bundle"
+          
+            for cert in "$temp_dir"/certificate-*.pem; do
+              openssl x509 \
+                -in "$cert" \
+                -noout \
+                -fingerprint \
+                -sha256
+            done |
+              sed 's/.*=//' |
+              sort
+          
+            rm -rf "$temp_dir"
           }
 
           # Calculate fingerprints for the newly generated bundle.
