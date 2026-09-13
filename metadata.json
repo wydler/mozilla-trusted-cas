@@ -14,14 +14,14 @@
   },
   "custom_cas": {
     "directory": "custom-cas",
-    "certificate_count": 2,
-    "added_count": 2,
+    "certificate_count": 1,
+    "added_count": 1,
     "duplicate_count": 0
   },
   "bundle": {
     "file": "cacert.pem",
-    "sha256": "78fa522177878b4ab3650d492055e7d30eb4f46fe2fe06c325549b93f129fb52",
+    "sha256": "54dbf74819ab74b9f88a5a4b9176fbad8db9a73ab9baa88023060ceb0c06e716",
     "certificate_count": 122
   },
-  "generated_at": "2026-09-13T18:52:12Z"
+  "generated_at": "2026-09-13T19:54:25Z"
 }
