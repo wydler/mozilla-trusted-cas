@@ -559,25 +559,44 @@ jobs:
 
           echo "BEGIN markers:"
           grep -n '^-----BEGIN CERTIFICATE-----$' cacert.pem | tail
-
+          
           echo "END markers:"
           grep -n '^-----END CERTIFICATE-----$' cacert.pem | tail
-
-
+          
+          # Diagnostic: check every custom CA source file for a valid PEM structure.
+          echo
+          echo "Custom CA PEM structure:"
+          
+          for certificate in "${certificates[@]}"; do
+            echo
+            echo "File: ${certificate}"
+            echo "  BEGIN: $(grep -c '^-----BEGIN CERTIFICATE-----$' "${certificate}")"
+            echo "  END:   $(grep -c '^-----END CERTIFICATE-----$' "${certificate}")"
+          done
+          
+          echo
+          echo "Malformed BEGIN markers:"
+          grep -n 'BEGIN CERTIFICATE' cacert.pem |
+            grep -v '^.*:-----BEGIN CERTIFICATE-----$' |
+            cat -A
+          
+          echo
+          echo "Malformed END markers:"
+          grep -n 'END CERTIFICATE' cacert.pem |
+            grep -v '^.*:-----END CERTIFICATE-----$' |
+            cat -A
+          
           certificate_count="$(
             grep -c '^-----BEGIN CERTIFICATE-----$' cacert.pem
           )"
-
-          echo "Lines 3765-3845 of cacert.pem:"
-          sed -n '3765,3845p' cacert.pem
-
+          
           end_certificate_count="$(
             grep -c '^-----END CERTIFICATE-----$' cacert.pem
           )"
-    
+          
           echo "BEGIN CERTIFICATE markers: ${certificate_count}"
           echo "END CERTIFICATE markers:   ${end_certificate_count}"
-
+          
           if [ "${certificate_count}" -ne "${end_certificate_count}" ]; then
             echo "::error::Mismatched certificate markers"
             exit 1
