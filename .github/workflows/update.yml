@@ -564,7 +564,10 @@ jobs:
           certificate_count="$(
             grep -c '^-----BEGIN CERTIFICATE-----$' cacert.pem
           )"
-    
+
+          echo "Lines 3765-3845 of cacert.pem:"
+          sed -n '3765,3845p' cacert.pem
+
           end_certificate_count="$(
             grep -c '^-----END CERTIFICATE-----$' cacert.pem
           )"
