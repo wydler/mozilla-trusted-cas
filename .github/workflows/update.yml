@@ -504,6 +504,7 @@ jobs:
 
               # Remove empty lines and trailing whitespace from source PEM.
               sed \
+                -e 's/\r$//' \
                 -e '/^[[:space:]]*$/d' \
                 -e 's/[[:blank:]]*$//' \
                 "${certificate}"
