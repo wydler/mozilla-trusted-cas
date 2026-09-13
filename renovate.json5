@@ -55,8 +55,8 @@
       datasourceTemplate: 'github-tags',
       depNameTemplate: 'curl/curl',
       versioningTemplate: 'regex:^(?:curl-)?(?<major>\\d+)_(?<minor>\\d+)_(?<patch>\\d+)$',
-      currentValueTemplate: '{{{currentValue}}}',
-      autoReplaceStringTemplate: " # renovate: datasource=github-tags depName=curl/curl\n CURL_COMMIT: '{{{newDigest}}}' # {{{newValue}}}",
+      // currentValueTemplate: '{{{currentValue}}}',
+      autoReplaceStringTemplate: "  # renovate: datasource=github-tags depName=curl/curl\n  CURL_VERSION: '{{replace 'curl-' '' newValue}}' # {{{newValue}}}\n\n  # Pinned curl release commit containing mk-ca-bundle.pl.\n  CURL_COMMIT: '{{{newDigest}}}'",
     },
   ],
 }
