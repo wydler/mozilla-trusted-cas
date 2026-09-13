@@ -133,15 +133,21 @@ jobs:
               }
             ' mk-ca-bundle.pl
           )"
-
           if [ -z "${version}" ]; then
             echo "::error::Unable to determine mk-ca-bundle.pl version"
             exit 1
           fi
 
+          sha256="$(
+            sha256sum mk-ca-bundle.pl |
+            awk '{print $1}'
+          )"
+
           echo "version=${version}" >> "${GITHUB_OUTPUT}"
+          echo "sha256=${sha256}" >> "${GITHUB_OUTPUT}"
 
           echo "mk-ca-bundle.pl version: ${version}"
+          echo "mk-ca-bundle.pl SHA256: ${sha256}"
           echo "curl commit: ${CURL_COMMIT}"
 
 
@@ -771,6 +777,8 @@ jobs:
               "${CURL_COMMIT}" \
             --arg generator_version \
               "${{ steps.generator.outputs.version }}" \
+            --arg generator_sha256 \
+              "${{ steps.generator.outputs.sha256 }}" \
             --arg custom_ca_directory \
               "${CUSTOM_CA_DIRECTORY}" \
             --arg bundle_file \
@@ -798,7 +806,8 @@ jobs:
                 name: $generator_name,
                 repository: $generator_repository,
                 commit: $generator_commit,
-                version: $generator_version
+                version: $generator_version,
+                sha256: $generator_sha256
               },
               custom_cas: {
                 directory: $custom_ca_directory,
