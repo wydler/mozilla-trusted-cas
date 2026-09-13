@@ -50,13 +50,11 @@
         '/^\\.github\\/workflows\\/update\\.ya?ml$/',
       ],
       matchStrings: [
-        '\\s*# renovate: datasource=github-tags depName=curl/curl\\s+CURL_VERSION:\\s*[\'"][0-9.]+[\'"]\\s+#\\s+(?<currentValue>curl-[0-9_]+)\\s+\\s*#.*\\s+CURL_COMMIT:\\s*[\'"](?<currentDigest>[0-9a-f]{40})[\'"]',
+        '\\s*# renovate: datasource=github-tags depName=curl/curl\\s+CURL_COMMIT:\\s*[\'"](?<currentDigest>[0-9a-f]{40})[\'"]\\s+#\\s+(?<currentValue>curl-[0-9_]+)',
       ],
       datasourceTemplate: 'github-tags',
       depNameTemplate: 'curl/curl',
       versioningTemplate: 'regex:^(?:curl-)?(?<major>\\d+)_(?<minor>\\d+)_(?<patch>\\d+)$',
-      // currentValueTemplate: '{{{currentValue}}}',
-      autoReplaceStringTemplate: "  # renovate: datasource=github-tags depName=curl/curl\n  CURL_VERSION: '{{replace 'curl-' '' newValue}}' # {{{newValue}}}\n\n  # Pinned curl release commit containing mk-ca-bundle.pl.\n  CURL_COMMIT: '{{{newDigest}}}'",
     },
   ],
 }
