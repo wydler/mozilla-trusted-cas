@@ -880,7 +880,7 @@ jobs:
             metadata.json
 
           commit-message: "chore: update Mozilla CA bundle"
-          title: "chore: update Mozilla CA bundle"
+          title: "chore: update Mozilla CA bundle (${{ steps.metadata.outputs.gh_full_version }})"
 
           body: |
             ## Mozilla CA bundle update
