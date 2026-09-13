@@ -554,6 +554,13 @@ jobs:
         run: |
           set -euo pipefail
 
+          echo "BEGIN markers:"
+          grep -n '^-----BEGIN CERTIFICATE-----$' cacert.pem | tail
+
+          echo "END markers:"
+          grep -n '^-----END CERTIFICATE-----$' cacert.pem | tail
+
+
           certificate_count="$(
             grep -c '^-----BEGIN CERTIFICATE-----$' cacert.pem
           )"
