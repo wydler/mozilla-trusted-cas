@@ -209,6 +209,18 @@ jobs:
         run: |
           set -euo pipefail
 
+          echo "BEGIN markers:"
+          grep -n '^-----BEGIN CERTIFICATE-----$' cacert.pem | tail
+          
+          echo "END markers:"
+          grep -n '^-----END CERTIFICATE-----$' cacert.pem | tail
+          
+          # HIER die neue Diagnose
+          
+          certificate_count="$(
+            grep -c '^-----BEGIN CERTIFICATE-----$' cacert.pem
+          )"
+
           test -s mozilla-cacert.pem
 
           certificate_count="$(
