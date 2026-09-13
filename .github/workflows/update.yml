@@ -502,8 +502,12 @@ jobs:
               echo "# Fingerprint (SHA-256): ${sha256_fingerprint}"
               echo "# Fingerprint (SHA1): ${sha1_fingerprint}"
 
-              # Remove empty lines from source PEM.
-              sed '/^$/d' "${certificate}"
+              # Remove empty lines and trailing whitespace from source PEM.
+              sed \
+                -e 's/\r$//' \
+                -e '/^[[:space:]]*$/d' \
+                -e 's/[[:blank:]]*$//' \
+                "${certificate}"
 
             } >> cacert.pem
 
