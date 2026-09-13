@@ -591,13 +591,13 @@ jobs:
           echo "Malformed BEGIN markers:"
           grep -n 'BEGIN CERTIFICATE' cacert.pem |
             grep -v '^.*:-----BEGIN CERTIFICATE-----$' |
-            cat -A
+            cat -A || true
           
           echo
           echo "Malformed END markers:"
           grep -n 'END CERTIFICATE' cacert.pem |
             grep -v '^.*:-----END CERTIFICATE-----$' |
-            cat -A
+            cat -A || true
           
           certificate_count="$(
             grep -c '^-----BEGIN CERTIFICATE-----$' cacert.pem
