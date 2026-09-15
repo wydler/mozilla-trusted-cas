@@ -1,0 +1,80 @@
+{
+  $schema: 'https://docs.renovatebot.com/renovate-schema.json',
+  extends: [
+    'config:recommended',
+    'helpers:pinGitHubActionDigests',
+  ],
+  commitMessagePrefix: 'chore(deps):',
+  timezone: 'Europe/Berlin',
+  prHourlyLimit: 0,
+  prConcurrentLimit: 0,
+  automerge: false,
+  minimumReleaseAge: '7 days',
+  minimumReleaseAgeBehaviour: 'timestamp-required',
+  internalChecksFilter: 'strict',
+  enabledManagers: [
+    'github-actions',
+    'custom.regex',
+  ],
+
+  packageRules: [
+    {
+      // ===========================================================================
+      // GitHub Actions
+      // ===========================================================================  
+      matchManagers: [
+        'github-actions',
+      ],
+      matchPackageNames: [
+        '*',
+      ],
+      labels: [
+        'dependencies',
+        'github_actions',
+      ],
+      draftPR: true,
+      additionalBranchPrefix: 'github_action/',
+      branchTopic: '{{depNameSanitized}}-{{#if newVersion}}{{newVersion}}{{else}}{{currentValue}}-{{newDigest}}{{/if}}',
+      commitMessageTopic: '{{depName}}',
+      commitMessageExtra: '{{#if newVersion}}from {{currentVersion}} to {{newVersion}}{{else}}{{newValue}} from {{currentDigestShort}} to {{newDigestShort}}{{/if}}',
+    },
+    {
+      // ===========================================================================
+      // Curl
+      // ===========================================================================
+      matchDatasources: [
+        'github-tags',
+      ],
+      matchPackageNames: [
+        'curl/curl',
+      ],
+      labels: [
+        'dependencies',
+        'github_actions',
+      ],
+      draftPR: true,
+      additionalBranchPrefix: 'github_action/',
+      branchTopic: '{{newVersion}}',
+      commitMessageTopic: '{{depName}}',
+      commitMessageExtra: '{{#if newVersion}}from {{currentVersion}} to {{newVersion}}{{else}}{{newValue}} from {{currentDigestShort}} to {{newDigestShort}}{{/if}}',
+    },
+  ],
+
+  customManagers: [
+    {
+      // ===========================================================================
+      // Curl
+      // ===========================================================================
+      customType: 'regex',
+      managerFilePatterns: [
+        '/^\\.github\\/workflows\\/update_mozilla_ca_bundle\\.ya?ml$/',
+      ],
+      matchStrings: [
+        '\\s*# renovate: datasource=github-tags depName=curl/curl\\s+CURL_COMMIT:\\s*[\'"](?<currentDigest>[0-9a-f]{40})[\'"]\\s+#\\s+(?<currentValue>curl-[0-9_]+)',
+      ],
+      datasourceTemplate: 'github-tags',
+      depNameTemplate: 'curl/curl',
+      versioningTemplate: 'regex:^(?:curl-)?(?<major>\\d+)_(?<minor>\\d+)_(?<patch>\\d+)$',
+    },
+  ],
+}
