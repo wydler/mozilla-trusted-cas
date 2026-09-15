@@ -1,6 +1,7 @@
+---
 name: Update Mozilla CA bundle
 
-on:
+"on":
   workflow_dispatch:
 
   schedule:
@@ -36,7 +37,7 @@ jobs:
       # ----------------------------------------------------------------------
 
       - name: Checkout repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
 
 
       # ----------------------------------------------------------------------
@@ -637,26 +638,26 @@ jobs:
           certificate_fingerprints() {
             local bundle="$1"
             local temp_dir
-          
+
             temp_dir="$(mktemp -d)"
-          
+
             awk -v temp_dir="$temp_dir" '
               /-----BEGIN CERTIFICATE-----/ {
                 in_cert=1
                 cert++
                 file=sprintf("%s/certificate-%05d.pem", temp_dir, cert)
               }
-          
+
               in_cert {
                 print > file
               }
-          
+
               /-----END CERTIFICATE-----/ {
                 close(file)
                 in_cert=0
               }
             ' "$bundle"
-          
+
             for cert in "$temp_dir"/certificate-*.pem; do
               openssl x509 \
                 -in "$cert" \
@@ -666,7 +667,7 @@ jobs:
             done |
               sed 's/.*=//' |
               sort
-          
+
             rm -rf "$temp_dir"
           }
 
@@ -867,7 +868,7 @@ jobs:
 
       - name: Create pull request
         if: steps.changes.outputs.changed == 'true'
-        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
+        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1  # v8.1.1
         with:
           token: "${{ secrets.GH_TOKEN }}"
           sign-commits: true
