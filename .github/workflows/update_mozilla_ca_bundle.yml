@@ -1,0 +1,935 @@
+name: Update Mozilla CA bundle
+
+on:
+  workflow_dispatch:
+
+  schedule:
+    - cron: '00 6 1 * *'
+
+permissions:
+  contents: write
+  pull-requests: write
+
+env:
+  # Pinned curl release commit containing mk-ca-bundle.pl.
+  # renovate: datasource=github-tags depName=curl/curl
+  CURL_COMMIT: '01346829096c61b372692f6dc43ffa778c6caccd' # curl-8_22_0
+
+  # Mozilla NSS certdata source.
+  CERTDATA_URL: 'https://hg.mozilla.org/releases/mozilla-release/raw-file/default/security/nss/lib/ckfw/builtins/certdata.txt'
+
+  # curl repository.
+  CURL_REPOSITORY: 'https://github.com/curl/curl'
+
+  # Directory containing additional, locally trusted CA certificates.
+  CUSTOM_CA_DIRECTORY: 'custom-cas'
+
+jobs:
+  update:
+    name: Generate CA bundle
+    runs-on: ubuntu-latest
+
+    steps:
+
+      # ----------------------------------------------------------------------
+      # Checkout
+      # ----------------------------------------------------------------------
+
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+
+      # ----------------------------------------------------------------------
+      # Dependencies
+      # ----------------------------------------------------------------------
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes \
+            curl \
+            jq \
+            openssl \
+            perl
+
+
+      # ----------------------------------------------------------------------
+      # Workflow metadata
+      # ----------------------------------------------------------------------
+
+      - name: Create necessary metadatas
+        id: metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # Current date in YYYYMMDD format.
+          # Europe/Berlin is used intentionally.
+          current_date="$(
+            TZ='Europe/Berlin' date +'%Y%m%d'
+          )"
+
+          # GitHub workflow run number padded to four digits.
+          gh_action_run_number="$(
+            printf "%04d" "${GITHUB_RUN_NUMBER}"
+          )"
+
+          # Attempt number of the current workflow run.
+          gh_action_run_attempt="${{ github.run_attempt }}"
+
+          # Version format:
+          # YYYYMMDD.RUN_NUMBER.ATTEMPT
+          #
+          # Example:
+          # 20260523.0042.1
+          version_full="${current_date}.${gh_action_run_number}.${gh_action_run_attempt}"
+
+          gh_branch_name="updates/mozilla-ca-bundle/${version_full}"
+
+          echo "version_full=${version_full}" >> "${GITHUB_OUTPUT}"
+          echo "gh_branch_name=${gh_branch_name}" >> "${GITHUB_OUTPUT}"
+
+          echo "Version: ${version_full}"
+          echo "Branch:  ${gh_branch_name}"
+
+
+      # ----------------------------------------------------------------------
+      # Download and validate mk-ca-bundle.pl
+      # ----------------------------------------------------------------------
+
+      - name: Download mk-ca-bundle.pl
+        run: |
+          set -euo pipefail
+
+          curl \
+            --fail \
+            --silent \
+            --show-error \
+            --location \
+            --retry 5 \
+            --retry-delay 2 \
+            --output mk-ca-bundle.pl \
+            "${CURL_REPOSITORY}/raw/${CURL_COMMIT}/scripts/mk-ca-bundle.pl"
+
+          chmod +x mk-ca-bundle.pl
+
+      - name: Validate mk-ca-bundle.pl
+        run: |
+          set -euo pipefail
+
+          perl -c mk-ca-bundle.pl
+
+      - name: Determine mk-ca-bundle.pl version
+        id: generator
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          version="$(
+            awk -F"['\"]" '
+              /^[[:space:]]*my[[:space:]]+\$version[[:space:]]*=/ {
+                print $2
+                exit
+              }
+            ' mk-ca-bundle.pl
+          )"
+          if [ -z "${version}" ]; then
+            echo "::error::Unable to determine mk-ca-bundle.pl version"
+            exit 1
+          fi
+
+          sha256="$(
+            sha256sum mk-ca-bundle.pl |
+            awk '{print $1}'
+          )"
+
+          echo "version=${version}" >> "${GITHUB_OUTPUT}"
+          echo "sha256=${sha256}" >> "${GITHUB_OUTPUT}"
+
+          echo "mk-ca-bundle.pl version: ${version}"
+          echo "mk-ca-bundle.pl SHA256: ${sha256}"
+          echo "curl commit: ${CURL_COMMIT}"
+
+
+      # ----------------------------------------------------------------------
+      # Download Mozilla certificate source
+      # ----------------------------------------------------------------------
+
+      - name: Download Mozilla certdata.txt
+        run: |
+          set -euo pipefail
+
+          curl \
+            --fail \
+            --silent \
+            --show-error \
+            --location \
+            --retry 5 \
+            --retry-delay 2 \
+            --output certdata.txt \
+            "${CERTDATA_URL}"
+
+          test -s certdata.txt
+
+      - name: Calculate certdata checksum
+        id: source
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          sha256="$(
+            sha256sum certdata.txt |
+            awk '{print $1}'
+          )"
+
+          echo "sha256=${sha256}" >> "${GITHUB_OUTPUT}"
+
+          echo "Mozilla certdata.txt SHA256:"
+          echo "${sha256}"
+
+
+      # ----------------------------------------------------------------------
+      # Generate Mozilla CA bundle
+      # ----------------------------------------------------------------------
+
+      - name: Generate Mozilla CA bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          ./mk-ca-bundle.pl \
+            -m \
+            -n \
+            mozilla-cacert.pem
+
+          test -s mozilla-cacert.pem
+
+      - name: Validate Mozilla CA bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          test -s mozilla-cacert.pem
+
+          certificate_count="$(
+            grep -c '^-----BEGIN CERTIFICATE-----$' mozilla-cacert.pem
+          )"
+
+          if [ "${certificate_count}" -eq 0 ]; then
+            echo "::error::Mozilla CA bundle contains no certificates"
+            exit 1
+          fi
+
+          echo "Mozilla certificates: ${certificate_count}"
+
+          openssl crl2pkcs7 \
+            -nocrl \
+            -certfile mozilla-cacert.pem |
+          openssl pkcs7 \
+            -print_certs \
+            -noout
+
+
+      # ----------------------------------------------------------------------
+      # Add custom CA certificates
+      # ----------------------------------------------------------------------
+
+      - name: Add custom CA certificates
+        id: custom_cas
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          shopt -s nullglob
+
+          # Only .pem files are considered custom CA certificates.
+          #
+          # Sorting is important because it guarantees deterministic
+          # output regardless of filesystem ordering.
+          certificates=(
+            "${CUSTOM_CA_DIRECTORY}"/*.pem
+          )
+
+          if [ "${#certificates[@]}" -gt 1 ]; then
+            IFS=$'\n' certificates=(
+              $(printf '%s\n' "${certificates[@]}" | sort)
+            )
+            unset IFS
+          fi
+
+          custom_certificate_count=0
+          custom_certificate_added=0
+          custom_certificate_duplicate=0
+
+          if [ "${#certificates[@]}" -eq 0 ]; then
+            echo "No custom CA certificates found in ${CUSTOM_CA_DIRECTORY}/"
+          else
+            echo "Found ${#certificates[@]} custom CA file(s)."
+          fi
+
+
+          # ------------------------------------------------------------------
+          # Create temporary directory for existing certificates.
+          # ------------------------------------------------------------------
+
+          existing_dir="$(mktemp -d)"
+
+          cleanup() {
+            rm -rf "${existing_dir}"
+          }
+
+          trap cleanup EXIT
+
+
+          # ------------------------------------------------------------------
+          # Split Mozilla cacert.pem into individual certificates.
+          # ------------------------------------------------------------------
+
+          awk '
+            /-----BEGIN CERTIFICATE-----/ {
+              file=sprintf("'"${existing_dir}"'/cert-%05d.pem", ++n)
+            }
+
+            file != "" {
+              print > file
+            }
+
+            /-----END CERTIFICATE-----/ {
+              close(file)
+              file=""
+            }
+          ' mozilla-cacert.pem
+
+
+          # ------------------------------------------------------------------
+          # Build list of SHA-256 fingerprints already contained
+          # in the Mozilla CA bundle.
+          # ------------------------------------------------------------------
+
+          existing_fingerprints="${existing_dir}/fingerprints.txt"
+
+          : > "${existing_fingerprints}"
+
+          for certificate in "${existing_dir}"/*.pem; do
+            [ -f "${certificate}" ] || continue
+
+            openssl x509 \
+              -in "${certificate}" \
+              -noout \
+              -fingerprint \
+              -sha256 |
+              sed 's/^sha256 Fingerprint=//' |
+              tr -d ':' |
+              tr '[:lower:]' '[:upper:]' \
+              >> "${existing_fingerprints}"
+          done
+
+
+          # ------------------------------------------------------------------
+          # Start final bundle with the freshly generated Mozilla bundle.
+          # ------------------------------------------------------------------
+
+          cp mozilla-cacert.pem cacert.pem
+
+
+          # ------------------------------------------------------------------
+          # Process custom certificates.
+          # ------------------------------------------------------------------
+
+          for certificate in "${certificates[@]}"; do
+
+            custom_certificate_count=$((custom_certificate_count + 1))
+
+            echo
+            echo "Processing: ${certificate}"
+
+
+            # ----------------------------------------------------------------
+            # Validate certificate.
+            # ----------------------------------------------------------------
+
+            if ! openssl x509 \
+              -in "${certificate}" \
+              -noout; then
+
+              echo "::error::Invalid X.509 certificate: ${certificate}"
+              exit 1
+            fi
+
+
+            # ----------------------------------------------------------------
+            # Calculate SHA-256 fingerprint.
+            # ----------------------------------------------------------------
+
+            fingerprint="$(
+              openssl x509 \
+                -in "${certificate}" \
+                -noout \
+                -fingerprint \
+                -sha256 |
+              sed 's/^sha256 Fingerprint=//' |
+              tr -d ':' |
+              tr '[:lower:]' '[:upper:]'
+            )"
+
+            echo "SHA-256: ${fingerprint}"
+
+
+            # ----------------------------------------------------------------
+            # Check whether certificate already exists in Mozilla bundle.
+            # ----------------------------------------------------------------
+
+            if grep -Fxq "${fingerprint}" "${existing_fingerprints}"; then
+
+              echo "Certificate already exists in cacert.pem. Skipping."
+
+              custom_certificate_duplicate=$(
+                printf '%s' "$((custom_certificate_duplicate + 1))"
+              )
+
+              continue
+            fi
+
+
+            echo "Adding certificate to cacert.pem."
+
+
+            # ----------------------------------------------------------------
+            # Certificate metadata
+            # ----------------------------------------------------------------
+
+            subject="$(
+              openssl x509 \
+                -in "${certificate}" \
+                -noout \
+                -subject \
+                -nameopt RFC2253 |
+              sed 's/^subject=//'
+            )"
+
+            issuer="$(
+              openssl x509 \
+                -in "${certificate}" \
+                -noout \
+                -issuer \
+                -nameopt RFC2253 |
+              sed 's/^issuer=//'
+            )"
+
+            serial_number="$(
+              openssl x509 \
+                -in "${certificate}" \
+                -noout \
+                -serial |
+              sed 's/^serial=//' |
+              tr '[:lower:]' '[:upper:]' |
+              sed 's/../&:/g; s/:$//'
+            )"
+
+            not_before="$(
+              openssl x509 \
+                -in "${certificate}" \
+                -noout \
+                -startdate |
+              sed 's/^notBefore=//'
+            )"
+
+            not_after="$(
+              openssl x509 \
+                -in "${certificate}" \
+                -noout \
+                -enddate |
+              sed 's/^notAfter=//'
+            )"
+
+            sha256_fingerprint="$(
+              openssl x509 \
+                -in "${certificate}" \
+                -noout \
+                -fingerprint \
+                -sha256 |
+              sed 's/^sha256 Fingerprint=//' |
+              tr '[:lower:]' '[:upper:]'
+            )"
+
+            sha1_fingerprint="$(
+              openssl x509 \
+                -in "${certificate}" \
+                -noout \
+                -fingerprint \
+                -sha1 |
+              sed 's/^sha1 Fingerprint=//' |
+              tr '[:lower:]' '[:upper:]'
+            )"
+
+
+            # ----------------------------------------------------------------
+            # Use certificate CN as header.
+            # ----------------------------------------------------------------
+
+            common_name="$(
+              openssl x509 \
+                -in "${certificate}" \
+                -noout \
+                -subject \
+                -nameopt RFC2253 |
+              sed 's/^subject=//' |
+              sed -n 's/^CN=\([^,]*\).*/\1/p'
+            )"
+
+            # Fall back to complete subject if no CN exists.
+            if [ -z "${common_name}" ]; then
+              common_name="${subject}"
+            fi
+
+
+            # ----------------------------------------------------------------
+            # Append metadata and certificate.
+            #
+            # Exactly one blank line is added before each custom CA.
+            # No blank line is added after the certificate.
+            # ----------------------------------------------------------------
+
+            {
+              echo
+              echo "${common_name}"
+              printf '%*s\n' "${#common_name}" '' | tr ' ' '='
+              echo "# Issuer: ${issuer}"
+              echo "# Serial Number:${serial_number}"
+              echo "# Subject: ${subject}"
+              echo "# Not Valid Before: ${not_before}"
+              echo "# Not Valid After : ${not_after}"
+              echo "# Fingerprint (SHA-256): ${sha256_fingerprint}"
+              echo "# Fingerprint (SHA1): ${sha1_fingerprint}"
+
+              # Remove empty lines and trailing whitespace from source PEM.
+              sed \
+                -e 's/\r$//' \
+                -e '/^[[:space:]]*$/d' \
+                -e 's/[[:blank:]]*$//' \
+                "${certificate}"
+
+            } >> cacert.pem
+
+
+            # Add fingerprint to the list so that duplicate custom
+            # certificates in the same run are detected as well.
+            echo "${fingerprint}" >> "${existing_fingerprints}"
+
+            custom_certificate_added=$((custom_certificate_added + 1))
+
+          done
+
+
+          # ------------------------------------------------------------------
+          # Remove trailing blank lines from generated bundle.
+          #
+          # The final character must be exactly the newline belonging
+          # to the last certificate line.
+          # ------------------------------------------------------------------
+
+          sed -i ':a;N;$!ba;s/[[:space:]]*\n*$/\n/' cacert.pem
+
+
+          # ------------------------------------------------------------------
+          # GitHub outputs
+          # ------------------------------------------------------------------
+
+          {
+            echo "certificate_count=${custom_certificate_count}"
+            echo "added_count=${custom_certificate_added}"
+            echo "duplicate_count=${custom_certificate_duplicate}"
+          } >> "${GITHUB_OUTPUT}"
+
+
+          echo
+          echo "Custom CA certificates:"
+          echo "  Found:      ${custom_certificate_count}"
+          echo "  Added:      ${custom_certificate_added}"
+          echo "  Duplicates: ${custom_certificate_duplicate}"
+
+
+      # ----------------------------------------------------------------------
+      # Validate generated CA bundle
+      # ----------------------------------------------------------------------
+      - name: Validate generated CA bundle
+        id: bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          certificate_count="$(
+            grep -c '^-----BEGIN CERTIFICATE-----$' cacert.pem
+          )"
+
+          end_certificate_count="$(
+            grep -c '^-----END CERTIFICATE-----$' cacert.pem
+          )"
+
+          if [ "${certificate_count}" -ne "${end_certificate_count}" ]; then
+            echo "::error::Mismatched certificate markers"
+            exit 1
+          fi
+
+          if [ "${certificate_count}" -eq 0 ]; then
+            echo "::error::CA bundle does not contain any certificates"
+            exit 1
+          fi
+
+          echo "Certificate count: ${certificate_count}"
+
+          openssl crl2pkcs7 \
+            -nocrl \
+            -certfile cacert.pem |
+          openssl pkcs7 \
+            -print_certs \
+            -noout
+
+          if grep -nE '[[:blank:]]+$' cacert.pem; then
+            echo "::error::Trailing whitespace detected in cacert.pem"
+            exit 1
+          fi
+
+          if [ "$(tail -c 1 cacert.pem | wc -l)" -ne 1 ]; then
+            echo "::error::cacert.pem does not end with exactly one newline"
+            exit 1
+          fi
+
+          # Calculate the SHA256 of the actual generated file.
+          sha256="$(
+            sha256sum cacert.pem |
+            awk '{print $1}'
+          )"
+
+          echo "certificate_count=${certificate_count}" >> "${GITHUB_OUTPUT}"
+          echo "sha256=${sha256}" >> "${GITHUB_OUTPUT}"
+
+          echo
+          echo "CA bundle SHA256:"
+          echo "${sha256}"
+
+
+      # ----------------------------------------------------------------------
+      # Detect changes
+      #
+      # Compare the actual certificate content instead of cacert.pem as a
+      # complete file.
+      #
+      # mk-ca-bundle.pl adds a generation timestamp to cacert.pem, which must
+      # not trigger an update.
+      #
+      # Custom CA additions/removals must, however, trigger an update.
+      # ----------------------------------------------------------------------
+      - name: Check for changes
+        id: changes
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          echo "Git status before change detection:"
+          git status --short
+
+          # Create a normalized certificate fingerprint list from a PEM bundle.
+          #
+          # The result contains one SHA-256 fingerprint per certificate,
+          # sorted deterministically. Headers, timestamps, comments and
+          # certificate ordering are therefore irrelevant.
+          certificate_fingerprints() {
+            local bundle="$1"
+            local temp_dir
+          
+            temp_dir="$(mktemp -d)"
+          
+            awk -v temp_dir="$temp_dir" '
+              /-----BEGIN CERTIFICATE-----/ {
+                in_cert=1
+                cert++
+                file=sprintf("%s/certificate-%05d.pem", temp_dir, cert)
+              }
+          
+              in_cert {
+                print > file
+              }
+          
+              /-----END CERTIFICATE-----/ {
+                close(file)
+                in_cert=0
+              }
+            ' "$bundle"
+          
+            for cert in "$temp_dir"/certificate-*.pem; do
+              openssl x509 \
+                -in "$cert" \
+                -noout \
+                -fingerprint \
+                -sha256
+            done |
+              sed 's/.*=//' |
+              sort
+          
+            rm -rf "$temp_dir"
+          }
+
+          # Calculate fingerprints for the newly generated bundle.
+          generated_fingerprints="$(
+            mktemp
+          )"
+
+          trap 'rm -f "${generated_fingerprints}" "${current_fingerprints}"' EXIT
+
+          certificate_fingerprints cacert.pem \
+            > "${generated_fingerprints}"
+
+          echo "Generated certificate fingerprints:"
+          cat "${generated_fingerprints}"
+
+          # If there is no committed cacert.pem, this is necessarily an
+          # initial bundle creation.
+          if ! git cat-file -e HEAD:cacert.pem 2>/dev/null; then
+            echo
+            echo "No existing cacert.pem found."
+            echo "Changes detected."
+
+            echo "changed=true" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+
+          # Extract the committed cacert.pem.
+          current_bundle="$(
+            mktemp
+          )"
+
+          git show HEAD:cacert.pem > "${current_bundle}"
+
+          current_fingerprints="$(
+            mktemp
+          )"
+
+          certificate_fingerprints "${current_bundle}" \
+            > "${current_fingerprints}"
+
+          rm -f "${current_bundle}"
+
+          echo
+          echo "Current certificate fingerprints:"
+          cat "${current_fingerprints}"
+
+          echo
+          echo "Comparing certificate fingerprints..."
+
+          if cmp --silent \
+            "${generated_fingerprints}" \
+            "${current_fingerprints}"; then
+
+            echo
+            echo "No certificate changes detected."
+            echo "Timestamp-only changes are ignored."
+
+            echo "changed=false" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+
+          echo
+          echo "Certificate changes detected."
+
+          echo "changed=true" >> "${GITHUB_OUTPUT}"
+
+
+      # ----------------------------------------------------------------------
+      # Generate metadata
+      # ----------------------------------------------------------------------
+      - name: Generate metadata.json
+        if: steps.changes.outputs.changed == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          generated_at="$(
+            date --utc '+%Y-%m-%dT%H:%M:%SZ'
+          )"
+
+          jq -n \
+            --arg source_name \
+              "Mozilla NSS Root Certificate Store" \
+            --arg source_url \
+              "${CERTDATA_URL}" \
+            --arg source_tree \
+              "mozilla-release" \
+            --arg source_sha256 \
+              "${{ steps.source.outputs.sha256 }}" \
+            --arg generator_name \
+              "mk-ca-bundle.pl" \
+            --arg generator_repository \
+              "${CURL_REPOSITORY}" \
+            --arg generator_commit \
+              "${CURL_COMMIT}" \
+            --arg generator_version \
+              "${{ steps.generator.outputs.version }}" \
+            --arg generator_sha256 \
+              "${{ steps.generator.outputs.sha256 }}" \
+            --arg custom_ca_directory \
+              "${CUSTOM_CA_DIRECTORY}" \
+            --arg bundle_file \
+              "cacert.pem" \
+            --arg bundle_sha256 \
+              "${{ steps.bundle.outputs.sha256 }}" \
+            --argjson certificate_count \
+              "${{ steps.bundle.outputs.certificate_count }}" \
+            --argjson custom_certificate_count \
+              "${{ steps.custom_cas.outputs.certificate_count }}" \
+            --argjson custom_certificate_added \
+              "${{ steps.custom_cas.outputs.added_count }}" \
+            --argjson custom_certificate_duplicate \
+              "${{ steps.custom_cas.outputs.duplicate_count }}" \
+            --arg generated_at \
+              "${generated_at}" \
+            '{
+              source: {
+                name: $source_name,
+                url: $source_url,
+                tree: $source_tree,
+                sha256: $source_sha256
+              },
+              generator: {
+                name: $generator_name,
+                repository: $generator_repository,
+                commit: $generator_commit,
+                version: $generator_version,
+                sha256: $generator_sha256
+              },
+              custom_cas: {
+                directory: $custom_ca_directory,
+                certificate_count: $custom_certificate_count,
+                added_count: $custom_certificate_added,
+                duplicate_count: $custom_certificate_duplicate
+              },
+              bundle: {
+                file: $bundle_file,
+                sha256: $bundle_sha256,
+                certificate_count: $certificate_count
+              },
+              generated_at: $generated_at
+            }' > metadata.json
+
+          jq . metadata.json
+
+
+      # ----------------------------------------------------------------------
+      # Validate Git changes
+      # ----------------------------------------------------------------------
+      - name: Validate changes
+        if: steps.changes.outputs.changed == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          echo "Git status:"
+          git status --short
+
+          echo
+          echo "Validating metadata.json whitespace..."
+
+          if git ls-files --error-unmatch metadata.json >/dev/null 2>&1; then
+            git diff --check -- metadata.json
+          else
+            if grep -nE '[[:blank:]]+$' metadata.json; then
+              echo "::error::Trailing whitespace detected in metadata.json"
+              exit 1
+            fi
+          fi
+
+          test -s cacert.pem
+          test -s metadata.json
+
+
+      # ----------------------------------------------------------------------
+      # Show changes
+      # ----------------------------------------------------------------------
+      - name: Show changes
+        if: steps.changes.outputs.changed == 'true'
+        shell: bash
+        run: |
+          echo "Git status:"
+          git status --short
+
+          echo
+          echo "Changed files:"
+          git diff --name-status
+
+          echo
+          echo "Diff statistics:"
+          git diff --stat -- cacert.pem metadata.json
+
+
+      # ----------------------------------------------------------------------
+      # Create pull request
+      # ----------------------------------------------------------------------
+
+      - name: Create pull request
+        if: steps.changes.outputs.changed == 'true'
+        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
+        with:
+          token: "${{ secrets.GH_TOKEN }}"
+          sign-commits: true
+
+          branch: "${{ steps.metadata.outputs.gh_branch_name }}"
+          delete-branch: true
+
+          add-paths: |
+            cacert.pem
+            metadata.json
+
+          commit-message: "chore: update Mozilla CA bundle"
+          title: "chore: update Mozilla CA bundle (${{ steps.metadata.outputs.version_full }})"
+
+          body: |
+            ## Mozilla CA bundle update
+
+            This PR updates the CA bundle generated from the
+            Mozilla NSS `certdata.txt`.
+
+            ### Source
+
+            `${{ env.CERTDATA_URL }}`
+
+            ### Generator
+
+            `mk-ca-bundle.pl`
+
+            curl commit:
+            `${{ env.CURL_COMMIT }}`
+
+            version:
+            `${{ steps.generator.outputs.version }}`
+
+            ### Custom CA certificates
+
+            Directory:
+            `${{ env.CUSTOM_CA_DIRECTORY }}/`
+
+            Found:
+            `${{ steps.custom_cas.outputs.certificate_count }}`
+
+            Added:
+            `${{ steps.custom_cas.outputs.added_count }}`
+
+            Already present:
+            `${{ steps.custom_cas.outputs.duplicate_count }}`
+
+            ### Bundle
+
+            Certificates:
+            `${{ steps.bundle.outputs.certificate_count }}`
+
+            SHA256:
+            `${{ steps.bundle.outputs.sha256 }}`
+
+            The generated bundle was validated with OpenSSL.
+
+            `metadata.json` contains the provenance information.
+
+            This PR was created automatically by GitHub Actions.
+
+          labels: |
+            automated
+            dependencies
