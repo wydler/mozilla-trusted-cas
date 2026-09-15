@@ -638,26 +638,26 @@ jobs:
           certificate_fingerprints() {
             local bundle="$1"
             local temp_dir
-          
+
             temp_dir="$(mktemp -d)"
-          
+
             awk -v temp_dir="$temp_dir" '
               /-----BEGIN CERTIFICATE-----/ {
                 in_cert=1
                 cert++
                 file=sprintf("%s/certificate-%05d.pem", temp_dir, cert)
               }
-          
+
               in_cert {
                 print > file
               }
-          
+
               /-----END CERTIFICATE-----/ {
                 close(file)
                 in_cert=0
               }
             ' "$bundle"
-          
+
             for cert in "$temp_dir"/certificate-*.pem; do
               openssl x509 \
                 -in "$cert" \
@@ -667,7 +667,7 @@ jobs:
             done |
               sed 's/.*=//' |
               sort
-          
+
             rm -rf "$temp_dir"
           }
 
