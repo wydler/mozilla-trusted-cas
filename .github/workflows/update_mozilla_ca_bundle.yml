@@ -672,9 +672,8 @@ jobs:
           }
 
           # Calculate fingerprints for the newly generated bundle.
-          generated_fingerprints="$(
-            mktemp
-          )"
+          generated_fingerprints="$(mktemp)"
+          current_fingerprints=""
 
           trap 'rm -f "${generated_fingerprints}" "${current_fingerprints}"' EXIT
 
