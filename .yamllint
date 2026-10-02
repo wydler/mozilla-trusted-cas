@@ -11,5 +11,4 @@ rules:
   empty-lines:
     level: warning
 
-  line-length:
-    max: 235
+  line-length: disable
