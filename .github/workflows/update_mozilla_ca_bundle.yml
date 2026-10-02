@@ -877,17 +877,13 @@ jobs:
         with:
           token: "${{ steps.generate-token.outputs.token }}"
           sign-commits: true
-
           branch: "${{ steps.metadata.outputs.gh_branch_name }}"
           delete-branch: true
-
           add-paths: |
             cacert.pem
             metadata.json
-
           commit-message: "chore: update Mozilla CA bundle"
           title: "chore: update Mozilla CA bundle (${{ steps.metadata.outputs.version_full }})"
-
           body: |
             ## Mozilla CA bundle update
 
@@ -935,7 +931,6 @@ jobs:
             `metadata.json` contains the provenance information.
 
             This PR was created automatically by GitHub Actions.
-
           labels: |
             automated
             dependencies
