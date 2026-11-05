@@ -5,7 +5,7 @@ name: Update Mozilla CA bundle
   workflow_dispatch:
 
   schedule:
-    - cron: '00 6 1 * *'
+    - cron: '00 6 * * 1-5'
 
 permissions:
   contents: write
